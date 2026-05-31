@@ -18,7 +18,7 @@ Return the weighted average while skipping NaN values.
 
 <code>[**weights**]{.parameter-name} [:]{.parameter-annotation-sep} [None or array_like]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
 
-:   Weights for a weighted average. With ``axis=None``, weights must have the same shape as `a`. With an axis reduction, weights may either have the same shape as `a` or be 1-D with length equal to the reducing axis.
+:   Weights for a weighted reduction. With ``axis=None``, weights must have the same shape as `a`. With an axis reduction, weights may either have the same shape as `a` or be 1-D with length equal to the reducing axis.
 
 <code>[**ignore_inf**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
 

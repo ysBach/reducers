@@ -50,6 +50,4 @@ Return the sum with NaN/inf propagation.
 
 Plain reducers include every value, so NaN and inf propagate with IEEE / NumPy-like semantics. This is the fastest path for known-clean finite data.
 
-Weighted sums compute ``sum(a * weights)`` in one pass. Optional ``sum_weights`` and unweighted sums use the same retained-value policy.
-
-Like ``return_mean`` for variance and standard deviation, these optional returns expose quantities already available in the fused kernel and avoid separate reductions at the call site.
+Weighted sums compute ``sum(a * weights)`` in one pass. For ``nansum``, weights attached to skipped values are skipped with them; optional ``sum_weights`` and unweighted sums use the same retained-value policy. Like ``return_mean`` for variance and standard deviation, these optional returns expose quantities already available in the fused kernel and avoid separate reductions at the call site.
