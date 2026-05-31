@@ -46,7 +46,7 @@ Axis reductions cover the two layouts optimized by the Rust kernels:
 
 ```python
 rd.nanmedian(stack, axis=0)      # reduce a stack shaped (N, H, W)
-rd.nanmean(rows, axis=-1)        # reduce contiguous trailing slices
+rd.nanmean(values, axis=-1)      # reduce contiguous trailing-axis slices
 rd.nanpercentile(stack, [16, 50, 84], axis=0)
 ```
 

@@ -10,6 +10,7 @@ import time
 from collections.abc import Callable
 from importlib import metadata
 
+import numpy as np
 import reducers as rd
 
 GRAIN_ENV_NAMES = {
@@ -79,6 +80,31 @@ def ratio_cell(comp: float | None, rd: float) -> str:
     r = comp / rd
     cell = f"{r:.2f}x"
     return f"**{cell}**" if r > 0.95 else cell
+
+
+def assert_equivalent(got: object, expected: object, *, dtype: str, label: str) -> None:
+    """Assert benchmark outputs agree before timing a workload."""
+    rtol = 1e-6 if np.dtype(dtype) == np.float32 else 1e-12
+    atol = 1e-5 if np.dtype(dtype) == np.float32 else 1e-10
+    if isinstance(got, tuple) and isinstance(expected, tuple):
+        for idx, (got_item, expected_item) in enumerate(
+            zip(got, expected, strict=True)
+        ):
+            assert_equivalent(
+                got_item,
+                expected_item,
+                dtype=dtype,
+                label=f"{label}[{idx}]",
+            )
+        return
+    np.testing.assert_allclose(
+        got,
+        expected,
+        rtol=rtol,
+        atol=atol,
+        equal_nan=True,
+        err_msg=label,
+    )
 
 
 def trimmed_median(samples: list[float]) -> float:

@@ -21,10 +21,11 @@ ratio that is always ~100-1000x.
 from __future__ import annotations
 
 import argparse
+from functools import partial
 
 import numpy as np
 import reducers as rd
-from _benchutils import print_environment, ratio_cell, timeit
+from _benchutils import assert_equivalent, print_environment, ratio_cell, timeit
 
 try:
     import bottleneck as bn
@@ -148,6 +149,42 @@ def make_weights(shape, axis, dtype, *, full_shape):
     return np.ascontiguousarray(weights)
 
 
+def np_minmax(arr: np.ndarray, axis: int) -> tuple[np.ndarray, np.ndarray]:
+    return np.min(arr, axis=axis), np.max(arr, axis=axis)
+
+
+def np_nanminmax(arr: np.ndarray, axis: int) -> tuple[np.ndarray, np.ndarray]:
+    return np.nanmin(arr, axis=axis), np.nanmax(arr, axis=axis)
+
+
+def bn_nanminmax(arr: np.ndarray, axis: int) -> tuple[np.ndarray, np.ndarray]:
+    return bn.nanmin(arr, axis=axis), bn.nanmax(arr, axis=axis)
+
+
+def axis_call(fn, arr: np.ndarray, axis: int):
+    return fn(arr, axis=axis)
+
+
+def axis_q_call(fn, arr: np.ndarray, q: list[float], axis: int):
+    return fn(arr, q, axis=axis)
+
+
+def np_average_axis(arr: np.ndarray, weights: np.ndarray, axis: int):
+    return np.average(arr, weights=weights, axis=axis)
+
+
+def np_masked_average_axis(arr: np.ma.MaskedArray, weights: np.ndarray, axis: int):
+    return np.ma.average(arr, weights=weights, axis=axis).filled(np.nan)
+
+
+def rd_average_axis(arr: np.ndarray, weights: np.ndarray, axis: int):
+    return rd.average(arr, weights=weights, axis=axis)
+
+
+def rd_nanaverage_axis(arr: np.ndarray, weights: np.ndarray, axis: int):
+    return rd.nanaverage(arr, weights=weights, axis=axis)
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--ops", nargs="+", choices=OPS, default=list(OPS))
@@ -181,40 +218,50 @@ def main() -> None:
                         continue
                     if op == "minmax":
                         if plain:
+                            np_call = partial(np_minmax, a, axis)
+                            rd_call = partial(axis_call, rd.minmax, a, axis)
+                            assert_equivalent(
+                                rd_call(),
+                                np_call(),
+                                dtype=dtype,
+                                label=f"{op} {label} axis={axis} dtype={dtype}",
+                            )
                             npt = timeit(
-                                lambda arr=a, ax=axis: (
-                                    np.min(arr, axis=ax),
-                                    np.max(arr, axis=ax),
-                                ),
+                                np_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
                             rdt = timeit(
-                                lambda arr=a, ax=axis: rd.minmax(arr, axis=ax),
+                                rd_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
                             bnt = None
                         else:
-                            npt = timeit(
-                                lambda arr=a, ax=axis: (
-                                    np.nanmin(arr, axis=ax),
-                                    np.nanmax(arr, axis=ax),
+                            np_call = partial(np_nanminmax, a, axis)
+                            rd_call = partial(axis_call, rd.nanminmax, a, axis)
+                            assert_equivalent(
+                                rd_call(),
+                                np_call(),
+                                dtype=dtype,
+                                label=(
+                                    f"{_NAN_DISPLAY_OP[op]} {label} "
+                                    f"axis={axis} dtype={dtype}"
                                 ),
+                            )
+                            npt = timeit(
+                                np_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
                             rdt = timeit(
-                                lambda arr=a, ax=axis: rd.nanminmax(arr, axis=ax),
+                                rd_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
                             bnt = (
                                 timeit(
-                                    lambda arr=a, ax=axis: (
-                                        bn.nanmin(arr, axis=ax),
-                                        bn.nanmax(arr, axis=ax),
-                                    ),
+                                    partial(bn_nanminmax, a, axis),
                                     repeats=args.repeats,
                                     warmups=args.warmups,
                                 )
@@ -224,33 +271,46 @@ def main() -> None:
                     elif op == "average":
                         weights = make_weights(shape, axis, dtype, full_shape=False)
                         if plain:
+                            np_call = partial(np_average_axis, a, weights, axis)
+                            rd_call = partial(rd_average_axis, a, weights, axis)
+                            assert_equivalent(
+                                rd_call(),
+                                np_call(),
+                                dtype=dtype,
+                                label=f"{op} {label} axis={axis} dtype={dtype}",
+                            )
                             npt = timeit(
-                                lambda arr=a, w=weights, ax=axis: np.average(
-                                    arr, weights=w, axis=ax
-                                ),
+                                np_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
                             rdt = timeit(
-                                lambda arr=a, w=weights, ax=axis: rd.average(
-                                    arr, weights=w, axis=ax
-                                ),
+                                rd_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
                         else:
                             masked = np.ma.array(a, mask=np.isnan(a))
+                            np_call = partial(
+                                np_masked_average_axis, masked, weights, axis
+                            )
+                            rd_call = partial(rd_nanaverage_axis, a, weights, axis)
+                            assert_equivalent(
+                                rd_call(),
+                                np_call(),
+                                dtype=dtype,
+                                label=(
+                                    f"{_NAN_DISPLAY_OP[op]} {label} "
+                                    f"axis={axis} dtype={dtype}"
+                                ),
+                            )
                             npt = timeit(
-                                lambda arr=masked, w=weights, ax=axis: np.ma.average(
-                                    arr, weights=w, axis=ax
-                                ).filled(np.nan),
+                                np_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
                             rdt = timeit(
-                                lambda arr=a, w=weights, ax=axis: rd.nanaverage(
-                                    arr, weights=w, axis=ax
-                                ),
+                                rd_call,
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
@@ -264,13 +324,21 @@ def main() -> None:
                             np_fn = np.quantile if plain else np.nanquantile
                             rd_fn = rd.quantile if plain else rd.nanquantile
                         bnt = None
+                        np_call = partial(axis_q_call, np_fn, a, q, axis)
+                        rd_call = partial(axis_q_call, rd_fn, a, q, axis)
+                        assert_equivalent(
+                            rd_call(),
+                            np_call(),
+                            dtype=dtype,
+                            label=f"{op} {label} axis={axis} dtype={dtype}",
+                        )
                         npt = timeit(
-                            lambda fn=np_fn, arr=a, q=q, ax=axis: fn(arr, q, axis=ax),
+                            np_call,
                             repeats=args.repeats,
                             warmups=args.warmups,
                         )
                         rdt = timeit(
-                            lambda fn=rd_fn, arr=a, q=q, ax=axis: fn(arr, q, axis=ax),
+                            rd_call,
                             repeats=args.repeats,
                             warmups=args.warmups,
                         )
@@ -278,13 +346,21 @@ def main() -> None:
                         np_fn = np_funcs[op]
                         rd_fn = rd_funcs[op]
                         bn_fn = bn_funcs[op]
+                        np_call = partial(axis_call, np_fn, a, axis)
+                        rd_call = partial(axis_call, rd_fn, a, axis)
+                        assert_equivalent(
+                            rd_call(),
+                            np_call(),
+                            dtype=dtype,
+                            label=f"{op} {label} axis={axis} dtype={dtype}",
+                        )
                         npt = timeit(
-                            lambda fn=np_fn, arr=a, ax=axis: fn(arr, axis=ax),
+                            np_call,
                             repeats=args.repeats,
                             warmups=args.warmups,
                         )
                         rdt = timeit(
-                            lambda fn=rd_fn, arr=a, ax=axis: fn(arr, axis=ax),
+                            rd_call,
                             repeats=args.repeats,
                             warmups=args.warmups,
                         )

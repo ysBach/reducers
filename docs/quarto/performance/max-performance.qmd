@@ -153,29 +153,45 @@ reshaped to a 2-D `(outer, n)` view, where `n` is the length of the reduced axis
 and `outer` is the product of all the other axes. A 3-D array still collapses to
 2-D: a `(100, 100, 100)` cube reduced along `axis=-1` becomes
 `(100 * 100, 100) = (10000, 100)`, so each of the 10,000 output elements reduces
-one contiguous length-100 row. Because the array is C-contiguous and the reduced
-axis is already last, this reshape is a free view (no copy); the flat
-`outer`-length result is then reshaped back to the kept shape `(100, 100)`. Scan
-reducers and order statistics both benefit because the reduced values are
-adjacent in memory.
+one contiguous length-100 slice. Because the array is C-contiguous and the
+reduced axis is already last, this reshape is a free view (no copy); the flat
+`outer`-length result is then reshaped back to the kept shape `(100, 100)`.
+Scan reducers and order statistics both benefit because the values along the
+reduced axis are adjacent in memory.
 
 ### Axis 0
 
 `axis=0` mirrors this with the reduced axis first: the input is reshaped to a
 2-D `(n, outer)` view, where `n` is the length of axis 0 and `outer` is the
 product of the remaining axes. A `(31, 100, 100)` stack reduced along `axis=0`
-becomes `(31, 100 * 100) = (31, 10000)`, again a free reshape. For `mean`,
-`sum`, `min`, `max`, and weighted average, the kernels stream contiguous input
-rows and update output chunks directly, instead of gathering one short strided
-slice per output element.
+becomes `(31, 100 * 100) = (31, 10000)`, again a free reshape.
+
+For scan reducers, the important trick is to work across the non-stacking axes.
+In a stack shaped `(N, H, W)`, axis `0` is the stacking axis and each stack level
+has `H * W` adjacent values across the non-stacking axes. The axis-0 kernels
+stream those adjacent chunks and update matching output positions. That is
+usually better than building a tiny temporary list along the stacking axis for
+every output position, especially once the output image is large.
+
+`mean`, `sum`, `min`, `max`, weighted average, `count_finite`, `var`, and `std`
+use this streaming shape. Variance and standard deviation still use the stable
+two-pass formula: first compute the mean for each output position, then scan the
+stacking axis again to add squared deviations. This reads the stack twice, but
+it keeps the numerically safer formula and avoids allocating one temporary
+vector per output position.
 
 Plain `axis=0` min/max keep a per-output NaN mask so the numeric comparison loop
 can stay branch-light while still propagating NaNs. NaN-aware min/max do not
 need that final propagation mask.
 
-Axis-0 order statistics still gather each reducing-axis slice into a scratch
-buffer. That is intentional: `nanmedian`, `nanpercentile`, and `nanquantile`
-need compact mutable values for selection or sorting anyway.
+Axis-0 order statistics still need a mutable scratch buffer, because selection
+and sorting rearrange values. For ordinary `[nan]median`, reducers
+copies the values along the stacking axis for one output position into scratch
+and then selects the needed middle rank. For finite-only median paths
+(`ignore_inf=True`, or Rust callers using `SkipNonFinite`), the kernel skips NaN
+and infinities while reading along the stacking axis, so scratch contains only
+the values that can contribute to the answer. This matches image-stack
+combination workloads where bad pixels are ignored.
 
 Performance depends on the reducer and the reducing-axis length. In the local
 benchmark (a `(100, 100, 100)` cube and short `(11, 100, 100)` / `(31, 100, 100)`
@@ -194,15 +210,16 @@ stacks):
   grains so those cases stay serial, while deeper stacks and wide shallow
   stacks can still use Rayon. The benchmark tables report `float32` and
   `float64` separately because the crossover differs by dtype.
-- Weighted `average` on `axis=0` carries more per-row overhead and trails NumPy
-  for short stacks; on `axis=-1` (contiguous rows) it beats NumPy.
+- Weighted `average` on `axis=0` carries more per-stack-level overhead and
+  trails NumPy for short stacks; on `axis=-1` (contiguous reduced-axis values)
+  it beats NumPy.
 
 ### Weights
 
 Axis weighted reductions accept either full-shape weights or 1-D weights along
 the reducing axis. For 1-D weights, `reducers` does not expand the weights into
-a full temporary array. The axis-0 weighted path streams the data rows and
-reuses the same per-row weight when weights are 1-D.
+a full temporary array. The axis-0 weighted path streams each stack level over
+the non-stacking axes and reuses the same per-level weight when weights are 1-D.
 
 For axis reductions, parallelism is across output elements. Scratch buffers are
 allocated once per Rayon worker, not once per output element.

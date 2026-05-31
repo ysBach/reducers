@@ -11,19 +11,30 @@ title: "Performance"
 | Small (≲ 100) 1-D arrays | Faster than NumPy for most cases, but Bottleneck can still win for `nan*` cases. |
 | Plain `axis=0` scans (`mean` / `sum` / `min` / `max`) on shallow, small-output stacks | Mixed: often near NumPy, sometimes slower. See Parallel Threads for the crossover. |
 | NaN-aware `axis=0` `nanmean` / `nanaverage` / `nansum` / `nanvar` on stacks | Faster than NumPy; also faster than Bottleneck except the shallowest stacks. |
-| all other cases (order statistics, `[nan]var`/`std`, larger arrays, `axis=-1`) | `reducers` is usually much faster than NumPy and Bottleneck locally. |
+| Axis-0 stack medians and `[nan]var` / `std` on larger outputs | Usually much faster locally, because these paths avoid building one temporary slice per output pixel. |
+| all other cases (order statistics, larger arrays, `axis=-1`) | `reducers` is usually much faster than NumPy and Bottleneck locally. |
 
 * NumPy functions such as `mean` and `sum` are extremely optimized and fast
   when the workload is tiny, so `reducers` does not try to force parallelism for
   shallow, small-output stacks.
 * However, `reducers` is much faster than NumPy and Bottleneck for larger arrays, NaN-aware reductions (`nan*` functions), and especially for larger stacks.
-* Also the `std` or `var` functions are often bottlenecks in data processing pipelines, and `reducers` is much faster than NumPy and Bottleneck for these reductions.
+* `std` and `var` are common bottlenecks in data processing pipelines. Axis-0 variance and standard deviation stream contiguous chunks from each stack level directly, while still using the stable two-pass formula described below.
   * For some use cases, `return_mean` can even skip additional call of `mean` and save computation time.
 
 ## How To Read The Numbers
 
 Benchmark ratios are reported as `np/rd` and `bn/rd`; values above `1` mean
 `reducers` is faster.
+
+The benchmark scripts check correctness before timing each `reducers` row. They
+compare against NumPy or masked NumPy with `np.testing.assert_allclose(...,
+equal_nan=True)`, using tight tolerances for `float64` and tolerances suitable
+for `float32`. If that check fails, the script stops instead of printing a
+speed number.
+
+The tables are recorded local runs from the environment below. They are useful
+for the shape of the performance story, but exact timings should be regenerated
+on the target machine when a small difference matters.
 
 ## Recorded Environment
 

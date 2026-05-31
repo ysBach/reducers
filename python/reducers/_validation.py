@@ -29,8 +29,11 @@ def prepare_1d(
 ) -> np.ndarray:
     """Return a contiguous 1-D array for a whole-array reduction.
 
-    Computed reducers promote integer/bool inputs to float64; exact-selection
-    reducers set ``preserve_dtype=True`` to keep integer/bool dtype. ``ravel``
+    Most computed reducers promote integer/bool inputs to float64 before
+    entering Rust. Median-style reducers may set ``preserve_dtype=True`` and
+    still return their public float result; that avoids a whole-array float copy
+    when Rust can select from integer values directly. Exact-selection reducers
+    also set ``preserve_dtype=True`` to keep integer/bool output dtype. ``ravel``
     of a C-contiguous array is a free view. With ``validate=False`` the caller
     guarantees a contiguous 1-D supported kernel dtype; no dtype promotion or
     dimensionality normalization is performed.

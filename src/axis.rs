@@ -33,6 +33,189 @@ fn number_scan_class(kind: Kind) -> AxisParallelClass {
     }
 }
 
+#[inline]
+fn cmp_axis_float<T: Float>(a: &T, b: &T) -> std::cmp::Ordering {
+    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+}
+
+#[inline]
+fn axis_median_value<T: Float>(buf: &mut [T]) -> T {
+    if buf.is_empty() {
+        return T::nan();
+    }
+    let mid = buf.len() / 2;
+    if buf.len() % 2 == 1 {
+        let (_, value, _) = buf.select_nth_unstable_by(mid, cmp_axis_float);
+        *value
+    } else {
+        let (_, upper, _) = buf.select_nth_unstable_by(mid, cmp_axis_float);
+        let upper = *upper;
+        let lower = buf[..mid]
+            .iter()
+            .copied()
+            .max_by(cmp_axis_float)
+            .expect("even median lower partition is non-empty");
+        T::from_f64((lower.to_f64() + upper.to_f64()) / 2.0)
+    }
+}
+
+#[inline]
+fn axis_lmedian_value<T: Float>(buf: &mut [T]) -> T {
+    if buf.is_empty() {
+        return T::nan();
+    }
+    let idx = (buf.len() - 1) / 2;
+    let (_, value, _) = buf.select_nth_unstable_by(idx, cmp_axis_float);
+    *value
+}
+
+#[inline]
+fn gather_axis0_all_values<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    j: usize,
+    buf: &mut [T],
+) -> Option<usize> {
+    let mut idx = j;
+    for slot in &mut buf[..n] {
+        let x = data[idx];
+        if x.is_nan() {
+            return None;
+        }
+        *slot = x;
+        idx += outer;
+    }
+    Some(n)
+}
+
+#[inline]
+fn gather_axis0_all_finite<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    j: usize,
+    buf: &mut [T],
+) -> usize {
+    let mut idx = j;
+    for slot in &mut buf[..n] {
+        *slot = data[idx];
+        idx += outer;
+    }
+    n
+}
+
+#[inline]
+fn gather_axis0_skip_nan<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    j: usize,
+    buf: &mut [T],
+) -> usize {
+    let mut idx = j;
+    let mut count = 0;
+    for _ in 0..n {
+        let x = data[idx];
+        if !x.is_nan() {
+            buf[count] = x;
+            count += 1;
+        }
+        idx += outer;
+    }
+    count
+}
+
+#[inline]
+fn gather_axis0_skip_nonfinite<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    j: usize,
+    buf: &mut [T],
+) -> usize {
+    let mut idx = j;
+    let mut count = 0;
+    for _ in 0..n {
+        let x = data[idx];
+        if x.is_finite() {
+            buf[count] = x;
+            count += 1;
+        }
+        idx += outer;
+    }
+    count
+}
+
+#[inline]
+fn axis0_median_or_nan<T: Float>(count: Option<usize>, buf: &mut [T]) -> T {
+    count.map_or_else(T::nan, |count| axis_median_value(&mut buf[..count]))
+}
+
+#[inline]
+fn axis0_lmedian_or_nan<T: Float>(count: Option<usize>, buf: &mut [T]) -> T {
+    count.map_or_else(T::nan, |count| axis_lmedian_value(&mut buf[..count]))
+}
+
+#[inline]
+fn axis_lmedian_number_value<T: Number>(buf: &mut [T]) -> T {
+    let idx = (buf.len() - 1) / 2;
+    let (_, value, _) = buf.select_nth_unstable(idx);
+    *value
+}
+
+#[inline]
+fn axis_median_number_value<T: Number>(buf: &mut [T]) -> f64 {
+    let mid = buf.len() / 2;
+    if buf.len() % 2 == 1 {
+        let (_, value, _) = buf.select_nth_unstable(mid);
+        value.to_f64()
+    } else {
+        let (_, upper, _) = buf.select_nth_unstable(mid);
+        let upper = upper.to_f64();
+        let lower = buf[..mid]
+            .iter()
+            .copied()
+            .max()
+            .expect("even median lower partition is non-empty")
+            .to_f64();
+        (lower + upper) / 2.0
+    }
+}
+
+fn reduce_axis0_gathered_float<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    kind: Kind,
+    ddof: usize,
+    policy: ScanPolicy,
+) -> Vec<T> {
+    let gather = |buf: &mut Vec<T>, j: usize| {
+        buf.clear();
+        for k in 0..n {
+            buf.push(data[k * outer + j]);
+        }
+        apply_mut(kind, buf, ddof, policy)
+    };
+    let class = if kind.needs_mut() {
+        AxisParallelClass::OrderMedian
+    } else {
+        scan_class(kind, policy)
+    };
+    let chunks = axis_parallel_chunks(class, outer, n);
+    if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map_init(|| Vec::<T>::with_capacity(n), gather)
+            .collect()
+    } else {
+        let mut buf = Vec::<T>::with_capacity(n);
+        (0..outer).map(|j| gather(&mut buf, j)).collect()
+    }
+}
+
 // --------------------------------------------------------------------------
 // scalar reducers
 // --------------------------------------------------------------------------
@@ -309,29 +492,323 @@ pub fn reduce_axis0<T: Float>(
         return out;
     }
 
-    let gather = |buf: &mut Vec<T>, j: usize| {
-        buf.clear();
-        for k in 0..n {
-            buf.push(data[k * outer + j]);
+    if matches!(kind, Kind::CountFinite) {
+        let mut out = vec![T::zero(); outer];
+        if n == 0 {
+            return out;
         }
-        apply_mut(kind, buf, ddof, policy)
-    };
-    let class = if kind.needs_mut() {
-        AxisParallelClass::OrderMedian
-    } else {
-        scan_class(kind, policy)
-    };
-    let chunks = axis_parallel_chunks(class, outer, n);
-    if chunks > 1 {
-        (0..outer)
-            .into_par_iter()
-            .with_min_len(outer.div_ceil(chunks))
-            .map_init(|| Vec::<T>::with_capacity(n), gather)
-            .collect()
-    } else {
-        let mut buf = Vec::<T>::with_capacity(n);
-        (0..outer).map(|j| gather(&mut buf, j)).collect()
+
+        let reduce_chunk = |start: usize, out_chunk: &mut [T]| {
+            let len = out_chunk.len();
+            let mut counts = vec![0usize; len];
+            for k in 0..n {
+                let row = &data[k * outer + start..k * outer + start + len];
+                for (count, &x) in counts.iter_mut().zip(row) {
+                    if x.is_finite() {
+                        *count += 1;
+                    }
+                }
+            }
+            for (dst, &count) in out_chunk.iter_mut().zip(&counts) {
+                *dst = T::from_f64(count as f64);
+            }
+        };
+
+        let chunks = axis_parallel_chunks(AxisParallelClass::ScanNan, outer, n);
+        if chunks > 1 {
+            let chunk_len = outer.div_ceil(chunks);
+            out.par_chunks_mut(chunk_len)
+                .enumerate()
+                .for_each(|(chunk_idx, out_chunk)| {
+                    reduce_chunk(chunk_idx * chunk_len, out_chunk);
+                });
+        } else {
+            reduce_chunk(0, &mut out);
+        }
+        return out;
     }
+
+    if matches!(kind, Kind::Var | Kind::Std) {
+        let mut out = vec![T::nan(); outer];
+        if n == 0 {
+            return out;
+        }
+
+        let reduce_chunk = |start: usize, out_chunk: &mut [T]| {
+            let len = out_chunk.len();
+            let mut sums = vec![0.0_f64; len];
+            let mut counts = vec![0usize; len];
+            match policy {
+                ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+                    for k in 0..n {
+                        let row = &data[k * outer + start..k * outer + start + len];
+                        for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                            *sum += x.to_f64();
+                            *count += 1;
+                        }
+                    }
+                }
+                ScanPolicy::SkipNan => {
+                    for k in 0..n {
+                        let row = &data[k * outer + start..k * outer + start + len];
+                        for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                            if !x.is_nan() {
+                                *sum += x.to_f64();
+                                *count += 1;
+                            }
+                        }
+                    }
+                }
+                ScanPolicy::SkipNonFinite => {
+                    for k in 0..n {
+                        let row = &data[k * outer + start..k * outer + start + len];
+                        for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                            if x.is_finite() {
+                                *sum += x.to_f64();
+                                *count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let mut means = vec![f64::NAN; len];
+            let mut ss = vec![0.0_f64; len];
+            for ((mean, &sum), &count) in means.iter_mut().zip(&sums).zip(&counts) {
+                if count > 0 {
+                    *mean = sum / count as f64;
+                }
+            }
+
+            match policy {
+                ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+                    for k in 0..n {
+                        let row = &data[k * outer + start..k * outer + start + len];
+                        for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                            let d = x.to_f64() - mean;
+                            *acc += d * d;
+                        }
+                    }
+                }
+                ScanPolicy::SkipNan => {
+                    for k in 0..n {
+                        let row = &data[k * outer + start..k * outer + start + len];
+                        for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                            if !x.is_nan() {
+                                let d = x.to_f64() - mean;
+                                *acc += d * d;
+                            }
+                        }
+                    }
+                }
+                ScanPolicy::SkipNonFinite => {
+                    for k in 0..n {
+                        let row = &data[k * outer + start..k * outer + start + len];
+                        for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                            if x.is_finite() {
+                                let d = x.to_f64() - mean;
+                                *acc += d * d;
+                            }
+                        }
+                    }
+                }
+            }
+
+            for ((dst, &acc), &count) in out_chunk.iter_mut().zip(&ss).zip(&counts) {
+                if count <= ddof {
+                    *dst = T::nan();
+                } else {
+                    let variance = acc / (count - ddof) as f64;
+                    *dst = if matches!(kind, Kind::Std) {
+                        T::from_f64(variance.sqrt())
+                    } else {
+                        T::from_f64(variance)
+                    };
+                }
+            }
+        };
+
+        let chunks = axis_parallel_chunks(scan_class(kind, policy), outer, n);
+        if chunks > 1 {
+            let chunk_len = outer.div_ceil(chunks);
+            out.par_chunks_mut(chunk_len)
+                .enumerate()
+                .for_each(|(chunk_idx, out_chunk)| {
+                    reduce_chunk(chunk_idx * chunk_len, out_chunk);
+                });
+        } else {
+            reduce_chunk(0, &mut out);
+        }
+        return out;
+    }
+
+    if matches!(kind, Kind::Median | Kind::LMedian) {
+        let chunks = axis_parallel_chunks(AxisParallelClass::OrderMedian, outer, n);
+        let mut out = vec![T::nan(); outer];
+        let reduce_chunk = |start: usize, out_chunk: &mut [T]| {
+            let mut buf = vec![T::zero(); n];
+            match (kind, policy) {
+                (Kind::Median, ScanPolicy::AllValues) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count =
+                            gather_axis0_all_values(data, n, outer, start + offset, &mut buf);
+                        *dst = axis0_median_or_nan(count, &mut buf);
+                    }
+                }
+                (Kind::Median, ScanPolicy::AllFinite) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count =
+                            gather_axis0_all_finite(data, n, outer, start + offset, &mut buf);
+                        *dst = axis_median_value(&mut buf[..count]);
+                    }
+                }
+                (Kind::Median, ScanPolicy::SkipNan) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count = gather_axis0_skip_nan(data, n, outer, start + offset, &mut buf);
+                        *dst = axis_median_value(&mut buf[..count]);
+                    }
+                }
+                (Kind::Median, ScanPolicy::SkipNonFinite) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count =
+                            gather_axis0_skip_nonfinite(data, n, outer, start + offset, &mut buf);
+                        *dst = axis_median_value(&mut buf[..count]);
+                    }
+                }
+                (Kind::LMedian, ScanPolicy::AllValues) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count =
+                            gather_axis0_all_values(data, n, outer, start + offset, &mut buf);
+                        *dst = axis0_lmedian_or_nan(count, &mut buf);
+                    }
+                }
+                (Kind::LMedian, ScanPolicy::AllFinite) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count =
+                            gather_axis0_all_finite(data, n, outer, start + offset, &mut buf);
+                        *dst = axis_lmedian_value(&mut buf[..count]);
+                    }
+                }
+                (Kind::LMedian, ScanPolicy::SkipNan) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count = gather_axis0_skip_nan(data, n, outer, start + offset, &mut buf);
+                        *dst = axis_lmedian_value(&mut buf[..count]);
+                    }
+                }
+                (Kind::LMedian, ScanPolicy::SkipNonFinite) => {
+                    for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                        let count =
+                            gather_axis0_skip_nonfinite(data, n, outer, start + offset, &mut buf);
+                        *dst = axis_lmedian_value(&mut buf[..count]);
+                    }
+                }
+                _ => unreachable!("axis-0 order path is only used for median/lmedian"),
+            }
+        };
+        if chunks > 1 {
+            let chunk_len = outer.div_ceil(chunks);
+            out.par_chunks_mut(chunk_len)
+                .enumerate()
+                .for_each(|(chunk_idx, out_chunk)| {
+                    reduce_chunk(chunk_idx * chunk_len, out_chunk);
+                });
+        } else {
+            reduce_chunk(0, &mut out);
+        }
+        return out;
+    }
+
+    reduce_axis0_gathered_float(data, n, outer, kind, ddof, policy)
+}
+
+fn reduce_axis0_number_order<T: Number>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    kind: Kind,
+    ddof: usize,
+) -> Vec<f64> {
+    let chunks = axis_parallel_chunks(AxisParallelClass::OrderMedian, outer, n);
+    let mut out = vec![f64::NAN; outer];
+    if n == 0 {
+        return out;
+    }
+    let reduce_chunk = |start: usize, out_chunk: &mut [f64]| {
+        let mut buf = vec![data[0]; n];
+        match kind {
+            Kind::Median => {
+                for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                    let mut idx = start + offset;
+                    for slot in &mut buf {
+                        *slot = data[idx];
+                        idx += outer;
+                    }
+                    *dst = axis_median_number_value(&mut buf);
+                }
+            }
+            Kind::LMedian => {
+                for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                    let mut idx = start + offset;
+                    for slot in &mut buf {
+                        *slot = data[idx];
+                        idx += outer;
+                    }
+                    *dst = axis_lmedian_number_value(&mut buf).to_f64();
+                }
+            }
+            _ => {
+                for (offset, dst) in out_chunk.iter_mut().enumerate() {
+                    let mut idx = start + offset;
+                    for slot in &mut buf {
+                        *slot = data[idx];
+                        idx += outer;
+                    }
+                    *dst = apply_number_mut(kind, &mut buf[..n], ddof);
+                }
+            }
+        }
+    };
+    if chunks > 1 {
+        let chunk_len = outer.div_ceil(chunks);
+        out.par_chunks_mut(chunk_len)
+            .enumerate()
+            .for_each(|(chunk_idx, out_chunk)| {
+                reduce_chunk(chunk_idx * chunk_len, out_chunk);
+            });
+    } else {
+        reduce_chunk(0, &mut out);
+    }
+    out
+}
+
+fn reduce_axis0_number_order_exact<T: Number>(data: &[T], n: usize, outer: usize) -> Vec<T> {
+    let chunks = axis_parallel_chunks(AxisParallelClass::OrderMedian, outer, n);
+    if outer == 0 {
+        return Vec::new();
+    }
+    let mut out = vec![data[0]; outer];
+    let reduce_chunk = |start: usize, out_chunk: &mut [T]| {
+        let mut buf = vec![data[0]; n];
+        for (offset, dst) in out_chunk.iter_mut().enumerate() {
+            let mut idx = start + offset;
+            for slot in &mut buf {
+                *slot = data[idx];
+                idx += outer;
+            }
+            *dst = axis_lmedian_number_value(&mut buf[..n]);
+        }
+    };
+    if chunks > 1 {
+        let chunk_len = outer.div_ceil(chunks);
+        out.par_chunks_mut(chunk_len)
+            .enumerate()
+            .for_each(|(chunk_idx, out_chunk)| {
+                reduce_chunk(chunk_idx * chunk_len, out_chunk);
+            });
+    } else {
+        reduce_chunk(0, &mut out);
+    }
+    out
 }
 
 /// Reduce each contiguous row of non-floating numeric `data` shaped
@@ -479,28 +956,41 @@ pub fn reduce_axis0_number<T: Number>(
         return out;
     }
 
-    let gather = |buf: &mut Vec<T>, j: usize| {
-        buf.clear();
-        for k in 0..n {
-            buf.push(data[k * outer + j]);
-        }
-        apply_number_mut(kind, buf, ddof)
-    };
     let class = if kind.needs_mut() {
         AxisParallelClass::OrderMedian
     } else {
         number_scan_class(kind)
     };
     let chunks = axis_parallel_chunks(class, outer, n);
-    if chunks > 1 {
-        (0..outer)
-            .into_par_iter()
-            .with_min_len(outer.div_ceil(chunks))
-            .map_init(|| Vec::<T>::with_capacity(n), gather)
-            .collect()
+
+    if kind.needs_mut() {
+        reduce_axis0_number_order(data, n, outer, kind, ddof)
     } else {
-        let mut buf = Vec::<T>::with_capacity(n);
-        (0..outer).map(|j| gather(&mut buf, j)).collect()
+        let gather = |buf: &mut Vec<T>, j: usize| {
+            let mut idx = j;
+            for k in 0..n {
+                buf[k] = data[idx];
+                idx += outer;
+            }
+            apply_number_mut(kind, &mut buf[..n], ddof)
+        };
+        let init_scratch = || {
+            let mut buf = Vec::<T>::with_capacity(n);
+            if n > 0 {
+                buf.resize(n, data[0]);
+            }
+            buf
+        };
+        if chunks > 1 {
+            (0..outer)
+                .into_par_iter()
+                .with_min_len(outer.div_ceil(chunks))
+                .map_init(init_scratch, gather)
+                .collect()
+        } else {
+            let mut buf = init_scratch();
+            (0..outer).map(|j| gather(&mut buf, j)).collect()
+        }
     }
 }
 
@@ -602,6 +1092,10 @@ pub fn reduce_axis0_number_exact<T: Number>(
             reduce_chunk(0, &mut out);
         }
         return out;
+    }
+
+    if matches!(kind, Kind::LMedian) {
+        return reduce_axis0_number_order_exact(data, n, outer);
     }
 
     let gather = |buf: &mut Vec<T>, j: usize| {

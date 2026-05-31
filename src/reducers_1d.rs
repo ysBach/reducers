@@ -16,7 +16,7 @@ fn cmp_float<T: Float>(a: &T, b: &T) -> std::cmp::Ordering {
 }
 
 /// Non-floating numeric element that can be reduced without NaN handling.
-pub trait Number: Copy + PartialOrd + Send + Sync + 'static {
+pub trait Number: Copy + Ord + Send + Sync + 'static {
     fn to_f64(self) -> f64;
 }
 
@@ -89,11 +89,6 @@ macro_rules! impl_number {
 }
 
 impl_number!(i8, u8, i16, u16, i32, u32, i64, u64);
-
-#[inline]
-fn cmp_number<T: Number>(a: &T, b: &T) -> std::cmp::Ordering {
-    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-}
 
 // --------------------------------------------------------------------------
 // sum / count (mean, sum)
@@ -1115,15 +1110,15 @@ fn number_median_of<T: Number>(buf: &mut [T]) -> f64 {
     }
     let mid = buf.len() / 2;
     if buf.len() % 2 == 1 {
-        let (_, value, _) = buf.select_nth_unstable_by(mid, cmp_number);
+        let (_, value, _) = buf.select_nth_unstable(mid);
         value.to_f64()
     } else {
-        let (_, upper, _) = buf.select_nth_unstable_by(mid, cmp_number);
+        let (_, upper, _) = buf.select_nth_unstable(mid);
         let upper = upper.to_f64();
         let lower = buf[..mid]
             .iter()
             .copied()
-            .max_by(cmp_number)
+            .max()
             .expect("even median lower partition is non-empty")
             .to_f64();
         (lower + upper) / 2.0
@@ -1148,7 +1143,7 @@ pub fn number_lmedian_value_in_place<T: Number>(buf: &mut [T]) -> Option<T> {
         return None;
     }
     let idx = (buf.len() - 1) / 2;
-    let (_, value, _) = buf.select_nth_unstable_by(idx, cmp_number);
+    let (_, value, _) = buf.select_nth_unstable(idx);
     Some(*value)
 }
 
@@ -1172,7 +1167,7 @@ pub fn number_percentiles_in_place<T: Number>(buf: &mut [T], qs: &[f64], out: &m
         let mut selected = Vec::<f64>::with_capacity(needed.len());
         let mut start = 0usize;
         for &idx in &needed {
-            let (_, value, _) = buf[start..].select_nth_unstable_by(idx - start, cmp_number);
+            let (_, value, _) = buf[start..].select_nth_unstable(idx - start);
             selected.push(value.to_f64());
             start = idx + 1;
         }
@@ -1182,7 +1177,7 @@ pub fn number_percentiles_in_place<T: Number>(buf: &mut [T], qs: &[f64], out: &m
             *dst = lo + (hi - lo) * frac;
         }
     } else {
-        buf.sort_unstable_by(cmp_number);
+        buf.sort_unstable();
         for (dst, &(lower, upper, frac)) in out.iter_mut().zip(ranks.iter()) {
             let lo = buf[lower].to_f64();
             let hi = buf[upper].to_f64();

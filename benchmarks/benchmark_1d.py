@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 import numpy as np
 import reducers as rd
-from _benchutils import print_environment, ratio_cell, timeit
+from _benchutils import assert_equivalent, print_environment, ratio_cell, timeit
 
 try:
     import bottleneck as bn
@@ -203,6 +203,14 @@ def main() -> None:
                 v = make_values(length, dtype, include_nan=not plain)
                 inner = calls(length)
                 for op in args.ops:
+                    funcs = funcs_for(v, op, plain=plain)
+                    expected = funcs["numpy"]()
+                    assert_equivalent(
+                        funcs["reducers"](),
+                        expected,
+                        dtype=dtype,
+                        label=f"{op} length={length} dtype={dtype}",
+                    )
                     t = {
                         n: timeit(
                             fn,
@@ -210,7 +218,7 @@ def main() -> None:
                             warmups=args.warmups,
                             inner=inner,
                         )
-                        for n, fn in funcs_for(v, op, plain=plain).items()
+                        for n, fn in funcs.items()
                     }
                     npt = t.get("numpy")
                     bnt = t.get("bottleneck")

@@ -257,16 +257,22 @@ def nanstd(a, axis=None, ddof=0, *, return_mean=False, ignore_inf=False, validat
 def median(a, axis=None, *, validate=True):
     """Median; NaN propagates (numpy ``median`` semantics)."""
     if axis is not None:
-        return _axis_scalar(a, axis, _K_MEDIAN, _ALL_VALUES, validate=validate)
-    return _core.median_1d(prepare_1d(a, validate=validate), _ALL_VALUES)
+        return _axis_scalar(
+            a, axis, _K_MEDIAN, _ALL_VALUES, validate=validate, preserve_dtype=True
+        )
+    return _core.median_1d(
+        prepare_1d(a, validate=validate, preserve_dtype=True), _ALL_VALUES
+    )
 
 
 def nanmedian(a, axis=None, *, ignore_inf=False, validate=True):
     """Median ignoring NaN (``np.nanmedian`` parity); ``ignore_inf`` drops inf."""
     pol = _nan_policy(ignore_inf)
     if axis is not None:
-        return _axis_scalar(a, axis, _K_MEDIAN, pol, validate=validate)
-    return _core.median_1d(prepare_1d(a, validate=validate), pol)
+        return _axis_scalar(
+            a, axis, _K_MEDIAN, pol, validate=validate, preserve_dtype=True
+        )
+    return _core.median_1d(prepare_1d(a, validate=validate, preserve_dtype=True), pol)
 
 
 def lmedian(a, axis=None, *, ignore_inf=False, validate=True):
