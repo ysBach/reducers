@@ -969,8 +969,8 @@ pub fn reduce_axis0_number<T: Number>(
     } else {
         let gather = |buf: &mut Vec<T>, j: usize| {
             let mut idx = j;
-            for k in 0..n {
-                buf[k] = data[idx];
+            for item in buf.iter_mut().take(n) {
+                *item = data[idx];
                 idx += outer;
             }
             apply_number_mut(kind, &mut buf[..n], ddof)

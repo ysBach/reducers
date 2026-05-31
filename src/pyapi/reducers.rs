@@ -20,6 +20,8 @@ use crate::parallel::{
 };
 use crate::reducers_1d::{self, Kind};
 
+type WeightedSumArrays = (Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>);
+
 macro_rules! dispatch_numeric_slice {
     ($arr:expr, $s:ident => $float_body:expr, $n:ident => $number_body:expr) => {{
         if let Ok(a) = $arr.extract::<PyReadonlyArray1<f64>>() {
@@ -406,7 +408,7 @@ fn weighted_sum_axis<'py>(
     weights_1d: bool,
     axis_last: bool,
     policy: u8,
-) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+) -> PyResult<WeightedSumArrays> {
     let p = ScanPolicy::from_code(policy);
     let result = dispatch_weighted_matrix!(
         arr,
