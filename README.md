@@ -4,9 +4,16 @@
 
 Rust-backed reduction functions for NumPy arrays - plain (numpy-like) and NaN-aware.
 
-Full documentation: <https://ysbach.github.io/reducers/>
+* Full documentation: <https://ysbach.github.io/reducers/>
+* Rust API reference: <https://docs.rs/reducers>
 
-Rust API reference: <https://docs.rs/reducers>
+The Goal of this toy project was:
+
+1. much faster than numpy in many use cases,
+2. much faster than bottleneck in many use cases, and
+3. especially maximum performance for median and variance calculations, which are often bottlenecks in data processing pipelines.
+
+`reducers` might be slower than numpy or bottleneck for small arrays. However, the most time-consuming reductions like large arrays or deep stacks, `median`, `percentile` or `quantile`, `var` and `std` are frequently several times (>100 times for nanpercentiles) faster than numpy and bottleneck.
 
 ## Install
 
@@ -21,19 +28,9 @@ For Rust crate use:
 reducers = "0.1"
 ```
 
-## First Look
-
-The target is:
-
-1. much faster than numpy in many use cases,
-2. much faster than bottleneck in many use cases, and
-3. especially maximum performance for median and variance calculations, which are often bottlenecks in data processing pipelines.
-
-`reducers` might be slower than numpy or bottleneck for small arrays. However, the most time-consuming reductions like large arrays or deep stacks, `median`, `percentile` or `quantile`, `var` and `std` are frequently several times (>100 times for nanpercentiles) faster than numpy and bottleneck.
-
 ## After Installation
 
-Run the autotuner once on the machine where `reducers` will run:
+Run the autotuner once on your machine where `reducers` will run:
 
 ```bash
 python -m reducers.autotuner
