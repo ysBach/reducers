@@ -103,7 +103,7 @@ NumPy unless the Python extension feature is enabled.
 
 ```toml
 [dependencies]
-reducers = { path = "/path/to/reducers" }
+reducers = "0.1"
 ```
 
 ```rust
@@ -129,3 +129,6 @@ Build local Rust API docs with:
 ```bash
 cargo doc --no-default-features --open
 ```
+
+The published Rust API reference is also available on
+[docs.rs](https://docs.rs/reducers).

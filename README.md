@@ -2,9 +2,28 @@
 
 **Reduction** functions + **Rust(rs)**, shortname `rd`.
 
-Rust-backed reduction functions for NumPy arrays - plain (numpy-like) and NaN-aware. The functions I implemented are those listed in the [numba](https://numba.pydata.org/numba-doc/dev/reference/numpysupported.html#reductions) documentation.
+Rust-backed reduction functions for NumPy arrays - plain (numpy-like) and NaN-aware.
 
-The target is
+Full documentation: <https://ysbach.github.io/reducers/>
+
+Rust API reference: <https://docs.rs/reducers>
+
+## Install
+
+```bash
+pip install reducers
+```
+
+For Rust crate use:
+
+```toml
+[dependencies]
+reducers = "0.1"
+```
+
+## First Look
+
+The target is:
 
 1. much faster than numpy in many use cases,
 2. much faster than bottleneck in many use cases, and
@@ -12,7 +31,7 @@ The target is
 
 `reducers` might be slower than numpy or bottleneck for small arrays. However, the most time-consuming reductions like large arrays or deep stacks, `median`, `percentile` or `quantile`, `var` and `std` are frequently several times (>100 times for nanpercentiles) faster than numpy and bottleneck.
 
-## After installation
+## After Installation
 
 Run the autotuner once on the machine where `reducers` will run:
 
@@ -65,3 +84,5 @@ feature.
 - `axis` may be `None` (default, whole-array), `0` or `-1` (identical to `a.ndim - 1`); other axes raise `NotImplementedError`. This keeps hidden transpose/copy costs out of the API and lets the Rust kernels specialize for the supported layouts.
 
 - NumPy-like **subset**: There are many unsupported parameters like `out`, `keepdims`, `where`, `dtype`, or percentile `method` (linear only). Adding them will not likely be considered unless there is a strong use case, as they add complexity and maintenance burden. The main focus is on the core reduction logic and, more importantly, performance.
+
+See the documentation for detailed API semantics, performance notes, axis behavior, and release wheels: <https://ysbach.github.io/reducers/>.
