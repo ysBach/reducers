@@ -25,7 +25,7 @@ For Rust crate use:
 
 ```toml
 [dependencies]
-reducers = "0.1"
+reducers = "0.2"
 ```
 
 ## After Installation

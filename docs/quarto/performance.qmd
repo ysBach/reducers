@@ -43,7 +43,7 @@ The benchmark tables in these docs were generated with:
 
 ```txt
 python: 3.13.11 (CPython)
-reducers: 0.1.0
+reducers: 0.2.0
 numpy: 2.4.6
 bottleneck: 1.6.0
 os: macOS-26.5-arm64-arm-64bit-Mach-O
