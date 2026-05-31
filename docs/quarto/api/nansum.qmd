@@ -1,7 +1,16 @@
 # nansum { #reducers.nansum }
 
 ```python
-nansum(a, axis=None, *, ignore_inf=False, validate=True)
+nansum(
+    a,
+    axis=None,
+    *,
+    weights=None,
+    return_sum_weights=False,
+    return_unweighted_sum=False,
+    ignore_inf=False,
+    validate=True,
+)
 ```
 
 Return the sum while skipping NaN values.
@@ -16,6 +25,18 @@ Return the sum while skipping NaN values.
 
 :   Axis to reduce. ``None`` reduces the whole array. ``0`` reduces strided reducing-axis slices into the remaining shape. ``-1`` and ``ndim - 1`` reduce contiguous slices. Other axes raise ``NotImplementedError``.
 
+<code>[**weights**]{.parameter-name} [:]{.parameter-annotation-sep} [None or array_like]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   If provided, return ``sum(a * weights)`` instead of ``sum(a)``. With ``axis=None``, weights must have the same shape as `a`. With an axis reduction, weights may either have the same shape as `a` or be 1-D with length equal to the reducing axis.
+
+<code>[**return_sum_weights**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
+
+:   If `True` and `weights` is provided, also return the sum of retained weights.
+
+<code>[**return_unweighted_sum**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
+
+:   If `True` and `weights` is provided, also return the unweighted sum of retained `a` values.
+
 <code>[**ignore_inf**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
 
 :   If `False`, skip only NaN values and keep ``+/-inf`` values, matching NumPy's ``nan*`` reducers. If `True`, skip all non-finite values.
@@ -26,10 +47,14 @@ Return the sum while skipping NaN values.
 
 ## Returns {.doc-section .doc-section-returns}
 
-<code>[**out**]{.parameter-name} [:]{.parameter-annotation-sep} [float or ndarray]{.parameter-annotation}</code>
+<code>[**out**]{.parameter-name} [:]{.parameter-annotation-sep} [float, ndarray, or tuple]{.parameter-annotation}</code>
 
-:   Reduction result. ``axis=None`` returns a Python ``float``. Axis reductions return an array with the reduced axis removed.
+:   Reduction result. ``axis=None`` returns a Python ``float``. Axis reductions return an array with the reduced axis removed. With `weights` and optional return flags, returns ``(weighted_sum, sum_weights)``, ``(weighted_sum, unweighted_sum)``, or ``(weighted_sum, sum_weights, unweighted_sum)``.
 
 ## Notes {.doc-section .doc-section-notes}
 
 NaN-aware reducers skip NaN values directly, without building a filtered copy of the input.
+
+Weighted sums compute ``sum(a * weights)`` in one pass. For ``nansum``, weights attached to skipped values are skipped with them; optional ``sum_weights`` and unweighted sums use the same retained-value policy.
+
+Like ``return_mean`` for variance and standard deviation, these optional returns expose quantities already available in the fused kernel and avoid separate reductions at the call site.

@@ -85,6 +85,40 @@ def _weighted(a, weights, axis, policy, validate):
     return _core.average_1d(arr, w_arr, policy)
 
 
+def _format_weighted_sum(result, return_sum_weights, return_unweighted_sum):
+    weighted_sum, sum_weights, unweighted_sum = result
+    if return_sum_weights and return_unweighted_sum:
+        return weighted_sum, sum_weights, unweighted_sum
+    if return_sum_weights:
+        return weighted_sum, sum_weights
+    if return_unweighted_sum:
+        return weighted_sum, unweighted_sum
+    return weighted_sum
+
+
+def _sum(a, axis, weights, policy, return_sum_weights, return_unweighted_sum, validate):
+    if weights is None:
+        if return_sum_weights or return_unweighted_sum:
+            raise ValueError(
+                "return_sum_weights and return_unweighted_sum require weights"
+            )
+        if axis is not None:
+            return _axis_scalar(a, axis, _K_SUM, policy, validate=validate)
+        return _core.sum_1d(prepare_1d(a, validate=validate), policy)
+
+    if axis is not None:
+        arr2, w_arr, weights_1d, axis_last, out_shape = prepare_weighted_axis(
+            a, weights, axis, validate=validate
+        )
+        result = _core.weighted_sum_axis(arr2, w_arr, weights_1d, axis_last, policy)
+        result = tuple(item.reshape(out_shape) for item in result)
+        return _format_weighted_sum(result, return_sum_weights, return_unweighted_sum)
+
+    arr, w_arr = prepare_weighted_1d(a, weights, validate=validate)
+    result = _core.weighted_sum_1d(arr, w_arr, policy)
+    return _format_weighted_sum(result, return_sum_weights, return_unweighted_sum)
+
+
 # ---- mean / sum ---------------------------------------------------------------
 
 
@@ -113,19 +147,47 @@ def nanaverage(a, weights=None, axis=None, *, ignore_inf=False, validate=True):
     return _weighted(a, weights, axis, _nan_policy(ignore_inf), validate)
 
 
-def sum(a, axis=None, *, validate=True):  # noqa: A001 - numpy-like name
+def sum(  # noqa: A001 - numpy-like name
+    a,
+    axis=None,
+    *,
+    weights=None,
+    return_sum_weights=False,
+    return_unweighted_sum=False,
+    validate=True,
+):
     """Sum; NaN/inf propagate."""
-    if axis is not None:
-        return _axis_scalar(a, axis, _K_SUM, _ALL_VALUES, validate=validate)
-    return _core.sum_1d(prepare_1d(a, validate=validate), _ALL_VALUES)
+    return _sum(
+        a,
+        axis,
+        weights,
+        _ALL_VALUES,
+        return_sum_weights,
+        return_unweighted_sum,
+        validate,
+    )
 
 
-def nansum(a, axis=None, *, ignore_inf=False, validate=True):
+def nansum(
+    a,
+    axis=None,
+    *,
+    weights=None,
+    return_sum_weights=False,
+    return_unweighted_sum=False,
+    ignore_inf=False,
+    validate=True,
+):
     """Sum ignoring NaN; ``ignore_inf`` also drops inf."""
-    pol = _nan_policy(ignore_inf)
-    if axis is not None:
-        return _axis_scalar(a, axis, _K_SUM, pol, validate=validate)
-    return _core.sum_1d(prepare_1d(a, validate=validate), pol)
+    return _sum(
+        a,
+        axis,
+        weights,
+        _nan_policy(ignore_inf),
+        return_sum_weights,
+        return_unweighted_sum,
+        validate,
+    )
 
 
 # ---- min / max / minmax -------------------------------------------------------

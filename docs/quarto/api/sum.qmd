@@ -1,7 +1,15 @@
 # sum { #reducers.sum }
 
 ```python
-sum(a, axis=None, *, validate=True)
+sum(
+    a,
+    axis=None,
+    *,
+    weights=None,
+    return_sum_weights=False,
+    return_unweighted_sum=False,
+    validate=True,
+)
 ```
 
 Return the sum with NaN/inf propagation.
@@ -16,16 +24,32 @@ Return the sum with NaN/inf propagation.
 
 :   Axis to reduce. ``None`` reduces the whole array. ``0`` reduces strided reducing-axis slices into the remaining shape. ``-1`` and ``ndim - 1`` reduce contiguous slices. Other axes raise ``NotImplementedError``.
 
+<code>[**weights**]{.parameter-name} [:]{.parameter-annotation-sep} [None or array_like]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   If provided, return ``sum(a * weights)`` instead of ``sum(a)``. With ``axis=None``, weights must have the same shape as `a`. With an axis reduction, weights may either have the same shape as `a` or be 1-D with length equal to the reducing axis.
+
+<code>[**return_sum_weights**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
+
+:   If `True` and `weights` is provided, also return the sum of retained weights.
+
+<code>[**return_unweighted_sum**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
+
+:   If `True` and `weights` is provided, also return the unweighted sum of retained `a` values.
+
 <code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
 
 :   If `True`, check dtype, dimensionality, contiguity, and axis validity before entering the Rust kernel. If `False`, the caller must provide a contiguous supported kernel dtype (``float32``, ``float64``, bool, or a NumPy integer dtype). `validate=False` skips dtype promotion: integer and bool arrays are reduced directly, while complex and object arrays remain unsupported.
 
 ## Returns {.doc-section .doc-section-returns}
 
-<code>[**out**]{.parameter-name} [:]{.parameter-annotation-sep} [float or ndarray]{.parameter-annotation}</code>
+<code>[**out**]{.parameter-name} [:]{.parameter-annotation-sep} [float, ndarray, or tuple]{.parameter-annotation}</code>
 
-:   Reduction result. ``axis=None`` returns a Python ``float``. Axis reductions return an array with the reduced axis removed.
+:   Reduction result. ``axis=None`` returns a Python ``float``. Axis reductions return an array with the reduced axis removed. With `weights` and optional return flags, returns ``(weighted_sum, sum_weights)``, ``(weighted_sum, unweighted_sum)``, or ``(weighted_sum, sum_weights, unweighted_sum)``.
 
 ## Notes {.doc-section .doc-section-notes}
 
 Plain reducers include every value, so NaN and inf propagate with IEEE / NumPy-like semantics. This is the fastest path for known-clean finite data.
+
+Weighted sums compute ``sum(a * weights)`` in one pass. Optional ``sum_weights`` and unweighted sums use the same retained-value policy.
+
+Like ``return_mean`` for variance and standard deviation, these optional returns expose quantities already available in the fused kernel and avoid separate reductions at the call site.

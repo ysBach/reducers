@@ -34,9 +34,21 @@ _IGNORE_INF = """ignore_inf : bool, optional
     NumPy's ``nan*`` reducers. If `True`, skip all non-finite values."""
 
 _WEIGHTS = """weights : None or array_like, optional
-    Weights for a weighted average. With ``axis=None``, weights must have the
+    Weights for a weighted reduction. With ``axis=None``, weights must have the
     same shape as `a`. With an axis reduction, weights may either have the same
     shape as `a` or be 1-D with length equal to the reducing axis."""
+
+_WEIGHTED_SUM_RETURNS = """weights : None or array_like, optional
+    If provided, return ``sum(a * weights)`` instead of ``sum(a)``. With
+    ``axis=None``, weights must have the same shape as `a`. With an axis
+    reduction, weights may either have the same shape as `a` or be 1-D with
+    length equal to the reducing axis.
+return_sum_weights : bool, optional
+    If `True` and `weights` is provided, also return the sum of retained
+    weights.
+return_unweighted_sum : bool, optional
+    If `True` and `weights` is provided, also return the unweighted sum of
+    retained `a` values."""
 
 _DDOF_RETURN_MEAN = """ddof : int, optional
     Delta degrees of freedom. Results with ``nvalid <= ddof`` are ``NaN``.
@@ -63,6 +75,13 @@ _Q_QUANTILE = """q : scalar or array_like
 _SCALAR_OR_AXIS_RETURNS = """out : float or ndarray
     Reduction result. ``axis=None`` returns a Python ``float``. Axis reductions
     return an array with the reduced axis removed."""
+
+_SUM_RETURNS = """out : float, ndarray, or tuple
+    Reduction result. ``axis=None`` returns a Python ``float``. Axis reductions
+    return an array with the reduced axis removed. With `weights` and optional
+    return flags, returns ``(weighted_sum, sum_weights)``,
+    ``(weighted_sum, unweighted_sum)``, or
+    ``(weighted_sum, sum_weights, unweighted_sum)``."""
 
 _EXACT_SELECT_RETURNS = """out : scalar or ndarray
     Reduction result. Float inputs return float results. Integer and bool inputs
@@ -103,6 +122,15 @@ _WEIGHTED_NOTE = (
     "all non-finite values in `a` are skipped), and the weights attached to "
     "skipped values are skipped with them; a NaN weight on a retained value "
     "propagates to the result."
+)
+
+_WEIGHTED_SUM_NOTE = (
+    "Weighted sums compute ``sum(a * weights)`` in one pass. For ``nansum``, "
+    "weights attached to skipped values are skipped with them; optional "
+    "``sum_weights`` and unweighted sums use the same retained-value policy. "
+    "Like ``return_mean`` for variance and standard deviation, these optional "
+    "returns expose quantities already available in the fused kernel and avoid "
+    "separate reductions at the call site."
 )
 
 _EXACT_INT_NOTE = (
@@ -161,15 +189,15 @@ _SPECS = {
     ),
     "sum": (
         "Return the sum with NaN/inf propagation.",
-        _params(),
-        _SCALAR_OR_AXIS_RETURNS,
-        _PLAIN_NOTE,
+        _params(_WEIGHTED_SUM_RETURNS),
+        _SUM_RETURNS,
+        f"{_PLAIN_NOTE}\n\n{_WEIGHTED_SUM_NOTE}",
     ),
     "nansum": (
         "Return the sum while skipping NaN values.",
-        _params(_IGNORE_INF),
-        _SCALAR_OR_AXIS_RETURNS,
-        _NAN_NOTE,
+        _params(_WEIGHTED_SUM_RETURNS, _IGNORE_INF),
+        _SUM_RETURNS,
+        f"{_NAN_NOTE}\n\n{_WEIGHTED_SUM_NOTE}",
     ),
     "min": (
         "Return the minimum with NaN propagation.",

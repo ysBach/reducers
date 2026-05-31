@@ -308,6 +308,55 @@ def test_average_weight_shape_and_dtype_errors():
         rd.average(np.ones(3), weights=np.array([1 + 1j, 2 + 0j, 3 + 0j]))
 
 
+def test_weighted_sum_returns_weighted_and_optional_plain_terms():
+    a = np.array([1.0, 2.0, 5.0, 9.0])
+    w = np.array([1.0, 0.5, 2.0, 3.0])
+
+    weighted = np.sum(a * w)
+    sum_weights = np.sum(w)
+    plain = np.sum(a)
+
+    assert rd.sum(a, weights=w) == weighted
+    assert rd.sum(a, weights=w, return_sum_weights=True) == (weighted, sum_weights)
+    assert rd.sum(a, weights=w, return_unweighted_sum=True) == (weighted, plain)
+    assert rd.sum(
+        a,
+        weights=w,
+        return_sum_weights=True,
+        return_unweighted_sum=True,
+    ) == (weighted, sum_weights, plain)
+
+
+def test_weighted_nansum_keeps_weights_only_for_retained_values():
+    a = np.array([1.0, np.nan, 3.0, np.inf])
+    w = np.array([2.0, 100.0, 5.0, 7.0])
+
+    got = rd.nansum(
+        a,
+        weights=w,
+        return_sum_weights=True,
+        return_unweighted_sum=True,
+    )
+    assert got == (np.inf, 14.0, np.inf)
+
+    finite = rd.nansum(
+        a,
+        weights=w,
+        ignore_inf=True,
+        return_sum_weights=True,
+        return_unweighted_sum=True,
+    )
+    assert finite == (17.0, 7.0, 4.0)
+
+
+def test_weighted_sum_flags_require_weights():
+    a = np.array([1.0, 2.0, 3.0])
+    with pytest.raises(ValueError, match="require weights"):
+        rd.sum(a, return_sum_weights=True)
+    with pytest.raises(ValueError, match="require weights"):
+        rd.nansum(a, return_unweighted_sum=True)
+
+
 @pytest.mark.parametrize(
     "dtype",
     [

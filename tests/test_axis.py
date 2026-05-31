@@ -413,6 +413,40 @@ def test_axis_average_errors():
         rd.average(a, weights=np.zeros(2), axis=0)
 
 
+def test_axis_weighted_sum_with_1d_weights_returns_optional_terms():
+    a = np.array(
+        [
+            [1.0, np.nan, 3.0],
+            [4.0, 5.0, np.inf],
+        ]
+    )
+    w = np.array([2.0, 3.0])
+
+    weighted, sum_weights, plain = rd.nansum(
+        a,
+        axis=0,
+        weights=w,
+        ignore_inf=True,
+        return_sum_weights=True,
+        return_unweighted_sum=True,
+    )
+
+    np.testing.assert_allclose(weighted, np.array([14.0, 15.0, 6.0]))
+    np.testing.assert_allclose(sum_weights, np.array([5.0, 3.0, 2.0]))
+    np.testing.assert_allclose(plain, np.array([5.0, 5.0, 3.0]))
+
+
+def test_axis_weighted_sum_with_full_weights_matches_numpy():
+    a = np.arange(2 * 3 * 4, dtype=np.float64).reshape(2, 3, 4)
+    w = np.linspace(1.0, 2.0, a.size).reshape(a.shape)
+
+    got = rd.sum(a, axis=-1, weights=w, return_sum_weights=True)
+    exp = (np.sum(a * w, axis=-1), np.sum(w, axis=-1))
+
+    np.testing.assert_allclose(got[0], exp[0])
+    np.testing.assert_allclose(got[1], exp[1])
+
+
 @pytest.mark.parametrize("axis", [0, -1])
 def test_axis_minmax_matches_nanmin_nanmax(axis):
     a = _arr(np.float64)

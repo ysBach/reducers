@@ -65,11 +65,16 @@ rd.nanmedian(stack, axis=0)      # stack reduction -> shape (256, 256)
 rd.nanmean(rows, axis=-1)        # contiguous trailing-axis reduction
 ```
 
-For spread reducers, `return_mean=True` returns the already-computed mean with
-the variance or standard deviation:
+* For `[nan]var` and `[nan]std`, `return_mean=True` returns the already-computed mean with the variance or standard deviation to avoid duplicate work when both are needed.
+* `[nan]sum(a, weights=w)` can do similar: `return_sum_weights=True` and `return_unweighted_sum=True` expose quantities already available during the fused weighted scan, avoiding separate `sum(a * w)`, `sum(w)`, or `sum(a)` passes when a caller needs them together.
 
 ```python
 std, mean = rd.nanstd(a, ddof=1, return_mean=True)
+weighted_sum, sum_of_weights = rd.nansum(a, weights=w, return_sum_weights=True)
+weighted_sum, unweighted_sum = rd.nansum(a, weights=w, return_unweighted_sum=True)
+weighted_sum, unweighted_sum, sum_of_weights = rd.nansum(
+    a, weights=w, return_unweighted_sum=True, return_sum_weights=True
+)
 ```
 
 Dual use: the kernel modules are pure Rust (no PyO3/NumPy) and usable as a crate;

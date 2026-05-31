@@ -323,6 +323,27 @@ fn average_1d(arr: &Bound<'_, PyAny>, weights: &Bound<'_, PyAny>, policy: u8) ->
 }
 
 #[pyfunction]
+fn weighted_sum_1d(
+    arr: &Bound<'_, PyAny>,
+    weights: &Bound<'_, PyAny>,
+    policy: u8,
+) -> PyResult<(f64, f64, f64)> {
+    let p = ScanPolicy::from_code(policy);
+    let result = dispatch_weighted_slice!(
+        arr,
+        weights,
+        s,
+        w => reducers_1d::weighted_sum(s, w, p),
+        n => reducers_1d::number_weighted_sum(n, w)
+    )?;
+    Ok((
+        result.weighted_sum,
+        result.sum_weights,
+        result.unweighted_sum,
+    ))
+}
+
+#[pyfunction]
 fn percentile_1d<'py>(
     py: Python<'py>,
     arr: &Bound<'py, PyAny>,
@@ -375,6 +396,46 @@ fn average_axis<'py>(
         }
     )?;
     Ok(PyArray1::from_vec(py, out))
+}
+
+#[pyfunction]
+fn weighted_sum_axis<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    weights: &Bound<'py, PyAny>,
+    weights_1d: bool,
+    axis_last: bool,
+    policy: u8,
+) -> PyResult<(Py<PyArray1<f64>>, Py<PyArray1<f64>>, Py<PyArray1<f64>>)> {
+    let p = ScanPolicy::from_code(policy);
+    let result = dispatch_weighted_matrix!(
+        arr,
+        weights,
+        a,
+        w => {
+            let (d0, d1) = a.as_array().dim();
+            let s = a.as_slice()?;
+            if axis_last {
+                axis::weighted_sum_axis_last(s, w, weights_1d, d0, d1, p)
+            } else {
+                axis::weighted_sum_axis0(s, w, weights_1d, d0, d1, p)
+            }
+        },
+        n => {
+            let (d0, d1) = n.as_array().dim();
+            let s = n.as_slice()?;
+            if axis_last {
+                axis::weighted_sum_axis_last_number(s, w, weights_1d, d0, d1)
+            } else {
+                axis::weighted_sum_axis0_number(s, w, weights_1d, d0, d1)
+            }
+        }
+    )?;
+    Ok((
+        PyArray1::from_vec(py, result.weighted_sums).unbind(),
+        PyArray1::from_vec(py, result.sum_weights).unbind(),
+        PyArray1::from_vec(py, result.unweighted_sums).unbind(),
+    ))
 }
 
 /// Axis reduction over a normalized 2-D contiguous array. `axis_last=true`
@@ -545,9 +606,11 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(var_1d, m)?)?;
     m.add_function(wrap_pyfunction!(count_finite_1d, m)?)?;
     m.add_function(wrap_pyfunction!(average_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_1d, m)?)?;
     m.add_function(wrap_pyfunction!(percentile_1d, m)?)?;
     m.add_function(wrap_pyfunction!(reduce_axis, m)?)?;
     m.add_function(wrap_pyfunction!(average_axis, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_axis, m)?)?;
     m.add_function(wrap_pyfunction!(percentile_axis, m)?)?;
     m.add_function(wrap_pyfunction!(get_num_threads, m)?)?;
     m.add_function(wrap_pyfunction!(get_parallel_grains, m)?)?;

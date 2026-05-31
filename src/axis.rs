@@ -11,7 +11,8 @@ use crate::parallel::{axis_parallel_chunks, AxisParallelClass};
 use crate::reducers_1d::{
     apply, apply_mut, apply_number, apply_number_mut, number_lmedian_value_in_place,
     number_max_value, number_min_value, number_percentiles_in_place, number_weighted_average,
-    percentiles_in_place, weighted_average, Kind, Number, Weight, WeightedMean,
+    number_weighted_sum, percentiles_in_place, weighted_average, weighted_sum, Kind, Number,
+    Weight, WeightedMean, WeightedSum,
 };
 
 #[inline]
@@ -1125,6 +1126,13 @@ pub struct WeightedAxis {
     pub empty: bool,
 }
 
+#[derive(Debug)]
+pub struct WeightedSumAxis {
+    pub weighted_sums: Vec<f64>,
+    pub sum_weights: Vec<f64>,
+    pub unweighted_sums: Vec<f64>,
+}
+
 #[inline]
 fn weighted_axis_finish(items: Vec<WeightedMean>) -> WeightedAxis {
     let mut zero_weight = false;
@@ -1141,6 +1149,23 @@ fn weighted_axis_finish(items: Vec<WeightedMean>) -> WeightedAxis {
         values,
         zero_weight,
         empty,
+    }
+}
+
+#[inline]
+fn weighted_sum_axis_finish(items: Vec<WeightedSum>) -> WeightedSumAxis {
+    let mut weighted_sums = Vec::with_capacity(items.len());
+    let mut sum_weights = Vec::with_capacity(items.len());
+    let mut unweighted_sums = Vec::with_capacity(items.len());
+    for item in items {
+        weighted_sums.push(item.weighted_sum);
+        sum_weights.push(item.sum_weights);
+        unweighted_sums.push(item.unweighted_sum);
+    }
+    WeightedSumAxis {
+        weighted_sums,
+        sum_weights,
+        unweighted_sums,
     }
 }
 
@@ -1172,6 +1197,36 @@ pub fn weighted_axis_last<T: Float, W: Weight>(
         (0..outer).map(compute).collect()
     };
     weighted_axis_finish(items)
+}
+
+pub fn weighted_sum_axis_last<T: Float, W: Weight>(
+    data: &[T],
+    weights: &[W],
+    weights_1d: bool,
+    outer: usize,
+    n: usize,
+    policy: ScanPolicy,
+) -> WeightedSumAxis {
+    let compute = |i: usize| {
+        let row = &data[i * n..(i + 1) * n];
+        let w = if weights_1d {
+            weights
+        } else {
+            &weights[i * n..(i + 1) * n]
+        };
+        weighted_sum(row, w, policy)
+    };
+    let chunks = axis_parallel_chunks(AxisParallelClass::Weighted, outer, n);
+    let items: Vec<WeightedSum> = if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map(compute)
+            .collect()
+    } else {
+        (0..outer).map(compute).collect()
+    };
+    weighted_sum_axis_finish(items)
 }
 
 pub fn weighted_axis0<T: Float, W: Weight>(
@@ -1310,6 +1365,151 @@ pub fn weighted_axis0<T: Float, W: Weight>(
     weighted_axis_finish(items)
 }
 
+pub fn weighted_sum_axis0<T: Float, W: Weight>(
+    data: &[T],
+    weights: &[W],
+    weights_1d: bool,
+    n: usize,
+    outer: usize,
+    policy: ScanPolicy,
+) -> WeightedSumAxis {
+    let compute_direct = |start: usize, len: usize| {
+        let mut weighted_sums = vec![0.0_f64; len];
+        let mut sum_weights = vec![0.0_f64; len];
+        let mut unweighted_sums = vec![0.0_f64; len];
+        for k in 0..n {
+            let row = &data[k * outer + start..k * outer + start + len];
+            if weights_1d {
+                let w = weights[k].to_f64();
+                match policy {
+                    ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+                        for ((weighted_sum, unweighted_sum), &x) in
+                            weighted_sums.iter_mut().zip(&mut unweighted_sums).zip(row)
+                        {
+                            let x = x.to_f64();
+                            *weighted_sum += x * w;
+                            *unweighted_sum += x;
+                        }
+                        for sum_weight in &mut sum_weights {
+                            *sum_weight += w;
+                        }
+                    }
+                    ScanPolicy::SkipNan => {
+                        for (((weighted_sum, sum_weight), unweighted_sum), &x) in weighted_sums
+                            .iter_mut()
+                            .zip(&mut sum_weights)
+                            .zip(&mut unweighted_sums)
+                            .zip(row)
+                        {
+                            if !x.is_nan() {
+                                let x = x.to_f64();
+                                *weighted_sum += x * w;
+                                *sum_weight += w;
+                                *unweighted_sum += x;
+                            }
+                        }
+                    }
+                    ScanPolicy::SkipNonFinite => {
+                        for (((weighted_sum, sum_weight), unweighted_sum), &x) in weighted_sums
+                            .iter_mut()
+                            .zip(&mut sum_weights)
+                            .zip(&mut unweighted_sums)
+                            .zip(row)
+                        {
+                            if x.is_finite() {
+                                let x = x.to_f64();
+                                *weighted_sum += x * w;
+                                *sum_weight += w;
+                                *unweighted_sum += x;
+                            }
+                        }
+                    }
+                }
+            } else {
+                let wrow = &weights[k * outer + start..k * outer + start + len];
+                match policy {
+                    ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+                        for (((weighted_sum, sum_weight), unweighted_sum), (&x, &w)) in
+                            weighted_sums
+                                .iter_mut()
+                                .zip(&mut sum_weights)
+                                .zip(&mut unweighted_sums)
+                                .zip(row.iter().zip(wrow))
+                        {
+                            let x = x.to_f64();
+                            let w = w.to_f64();
+                            *weighted_sum += x * w;
+                            *sum_weight += w;
+                            *unweighted_sum += x;
+                        }
+                    }
+                    ScanPolicy::SkipNan => {
+                        for (((weighted_sum, sum_weight), unweighted_sum), (&x, &w)) in
+                            weighted_sums
+                                .iter_mut()
+                                .zip(&mut sum_weights)
+                                .zip(&mut unweighted_sums)
+                                .zip(row.iter().zip(wrow))
+                        {
+                            if !x.is_nan() {
+                                let x = x.to_f64();
+                                let w = w.to_f64();
+                                *weighted_sum += x * w;
+                                *sum_weight += w;
+                                *unweighted_sum += x;
+                            }
+                        }
+                    }
+                    ScanPolicy::SkipNonFinite => {
+                        for (((weighted_sum, sum_weight), unweighted_sum), (&x, &w)) in
+                            weighted_sums
+                                .iter_mut()
+                                .zip(&mut sum_weights)
+                                .zip(&mut unweighted_sums)
+                                .zip(row.iter().zip(wrow))
+                        {
+                            if x.is_finite() {
+                                let x = x.to_f64();
+                                let w = w.to_f64();
+                                *weighted_sum += x * w;
+                                *sum_weight += w;
+                                *unweighted_sum += x;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        weighted_sums
+            .into_iter()
+            .zip(sum_weights)
+            .zip(unweighted_sums)
+            .map(
+                |((weighted_sum, sum_weights), unweighted_sum)| WeightedSum {
+                    weighted_sum,
+                    sum_weights,
+                    unweighted_sum,
+                    count: 0,
+                },
+            )
+            .collect::<Vec<_>>()
+    };
+
+    let chunks = axis_parallel_chunks(AxisParallelClass::Weighted, outer, n);
+    let items = if chunks > 1 {
+        let chunk_len = outer.div_ceil(chunks);
+        (0..outer)
+            .step_by(chunk_len)
+            .collect::<Vec<_>>()
+            .into_par_iter()
+            .flat_map(|start| compute_direct(start, chunk_len.min(outer - start)))
+            .collect()
+    } else {
+        compute_direct(0, outer)
+    };
+    weighted_sum_axis_finish(items)
+}
+
 pub fn weighted_axis_last_number<T: Number, W: Weight>(
     data: &[T],
     weights: &[W],
@@ -1337,6 +1537,35 @@ pub fn weighted_axis_last_number<T: Number, W: Weight>(
         (0..outer).map(compute).collect()
     };
     weighted_axis_finish(items)
+}
+
+pub fn weighted_sum_axis_last_number<T: Number, W: Weight>(
+    data: &[T],
+    weights: &[W],
+    weights_1d: bool,
+    outer: usize,
+    n: usize,
+) -> WeightedSumAxis {
+    let compute = |i: usize| {
+        let row = &data[i * n..(i + 1) * n];
+        let w = if weights_1d {
+            weights
+        } else {
+            &weights[i * n..(i + 1) * n]
+        };
+        number_weighted_sum(row, w)
+    };
+    let chunks = axis_parallel_chunks(AxisParallelClass::Weighted, outer, n);
+    let items: Vec<WeightedSum> = if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map(compute)
+            .collect()
+    } else {
+        (0..outer).map(compute).collect()
+    };
+    weighted_sum_axis_finish(items)
 }
 
 pub fn weighted_axis0_number<T: Number, W: Weight>(
@@ -1404,6 +1633,77 @@ pub fn weighted_axis0_number<T: Number, W: Weight>(
         compute_direct(0, outer)
     };
     weighted_axis_finish(items)
+}
+
+pub fn weighted_sum_axis0_number<T: Number, W: Weight>(
+    data: &[T],
+    weights: &[W],
+    weights_1d: bool,
+    n: usize,
+    outer: usize,
+) -> WeightedSumAxis {
+    let compute_direct = |start: usize, len: usize| {
+        let mut weighted_sums = vec![0.0_f64; len];
+        let mut sum_weights = vec![0.0_f64; len];
+        let mut unweighted_sums = vec![0.0_f64; len];
+        for k in 0..n {
+            let row = &data[k * outer + start..k * outer + start + len];
+            if weights_1d {
+                let w = weights[k].to_f64();
+                for ((weighted_sum, unweighted_sum), &x) in
+                    weighted_sums.iter_mut().zip(&mut unweighted_sums).zip(row)
+                {
+                    let x = x.to_f64();
+                    *weighted_sum += x * w;
+                    *unweighted_sum += x;
+                }
+                for sum_weight in &mut sum_weights {
+                    *sum_weight += w;
+                }
+            } else {
+                let wrow = &weights[k * outer + start..k * outer + start + len];
+                for (((weighted_sum, sum_weight), unweighted_sum), (&x, &w)) in weighted_sums
+                    .iter_mut()
+                    .zip(&mut sum_weights)
+                    .zip(&mut unweighted_sums)
+                    .zip(row.iter().zip(wrow))
+                {
+                    let x = x.to_f64();
+                    let w = w.to_f64();
+                    *weighted_sum += x * w;
+                    *sum_weight += w;
+                    *unweighted_sum += x;
+                }
+            }
+        }
+        weighted_sums
+            .into_iter()
+            .zip(sum_weights)
+            .zip(unweighted_sums)
+            .map(
+                |((weighted_sum, sum_weights), unweighted_sum)| WeightedSum {
+                    weighted_sum,
+                    sum_weights,
+                    unweighted_sum,
+                    count: 0,
+                },
+            )
+            .collect::<Vec<_>>()
+    };
+
+    let chunks = axis_parallel_chunks(AxisParallelClass::Weighted, outer, n);
+    let items = if chunks > 1 {
+        let chunk_len = outer.div_ceil(chunks);
+        (0..outer)
+            .step_by(chunk_len)
+            .collect::<Vec<_>>()
+            .into_par_iter()
+            .flat_map(|start| compute_direct(start, chunk_len.min(outer - start)))
+            .collect()
+    } else {
+        compute_direct(0, outer)
+    };
+    weighted_sum_axis_finish(items)
 }
 
 // --------------------------------------------------------------------------

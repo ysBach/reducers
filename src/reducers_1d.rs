@@ -168,6 +168,14 @@ pub struct WeightedMean {
     pub count: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct WeightedSum {
+    pub weighted_sum: f64,
+    pub sum_weights: f64,
+    pub unweighted_sum: f64,
+    pub count: usize,
+}
+
 #[inline]
 fn finish_weighted(sum: f64, sum_weight: f64, count: usize) -> WeightedMean {
     WeightedMean {
@@ -225,6 +233,58 @@ pub fn weighted_average<T: Float, W: Weight>(
         sum_weights.iter().sum(),
         counts.iter().sum(),
     )
+}
+
+pub fn weighted_sum<T: Float, W: Weight>(
+    values: &[T],
+    weights: &[W],
+    policy: ScanPolicy,
+) -> WeightedSum {
+    let mut weighted_sums = [0.0_f64; 4];
+    let mut sum_weights = [0.0_f64; 4];
+    let mut unweighted_sums = [0.0_f64; 4];
+    let mut counts = [0usize; 4];
+    let mut v_chunks = values.chunks_exact(4);
+    let mut w_chunks = weights.chunks_exact(4);
+    for (v, w) in (&mut v_chunks).zip(&mut w_chunks) {
+        for lane in 0..4 {
+            let x = v[lane];
+            let keep = match policy {
+                ScanPolicy::AllValues | ScanPolicy::AllFinite => true,
+                ScanPolicy::SkipNan => !x.is_nan(),
+                ScanPolicy::SkipNonFinite => x.is_finite(),
+            };
+            if keep {
+                let x = x.to_f64();
+                let w = w[lane].to_f64();
+                weighted_sums[lane] += x * w;
+                sum_weights[lane] += w;
+                unweighted_sums[lane] += x;
+                counts[lane] += 1;
+            }
+        }
+    }
+    for (&x, &w) in v_chunks.remainder().iter().zip(w_chunks.remainder()) {
+        let keep = match policy {
+            ScanPolicy::AllValues | ScanPolicy::AllFinite => true,
+            ScanPolicy::SkipNan => !x.is_nan(),
+            ScanPolicy::SkipNonFinite => x.is_finite(),
+        };
+        if keep {
+            let x = x.to_f64();
+            let w = w.to_f64();
+            weighted_sums[0] += x * w;
+            sum_weights[0] += w;
+            unweighted_sums[0] += x;
+            counts[0] += 1;
+        }
+    }
+    WeightedSum {
+        weighted_sum: weighted_sums.iter().sum(),
+        sum_weights: sum_weights.iter().sum(),
+        unweighted_sum: unweighted_sums.iter().sum(),
+        count: counts.iter().sum(),
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -969,6 +1029,49 @@ pub fn number_weighted_average<T: Number, W: Weight>(values: &[T], weights: &[W]
         sum_weights[0] += w;
     }
     finish_weighted(sums.iter().sum(), sum_weights.iter().sum(), values.len())
+}
+
+pub fn number_weighted_sum<T: Number, W: Weight>(values: &[T], weights: &[W]) -> WeightedSum {
+    let mut weighted_sums = [0.0_f64; 4];
+    let mut sum_weights = [0.0_f64; 4];
+    let mut unweighted_sums = [0.0_f64; 4];
+    let mut v_chunks = values.chunks_exact(4);
+    let mut w_chunks = weights.chunks_exact(4);
+    for (v, w) in (&mut v_chunks).zip(&mut w_chunks) {
+        let x0 = v[0].to_f64();
+        let x1 = v[1].to_f64();
+        let x2 = v[2].to_f64();
+        let x3 = v[3].to_f64();
+        let w0 = w[0].to_f64();
+        let w1 = w[1].to_f64();
+        let w2 = w[2].to_f64();
+        let w3 = w[3].to_f64();
+        weighted_sums[0] += x0 * w0;
+        weighted_sums[1] += x1 * w1;
+        weighted_sums[2] += x2 * w2;
+        weighted_sums[3] += x3 * w3;
+        sum_weights[0] += w0;
+        sum_weights[1] += w1;
+        sum_weights[2] += w2;
+        sum_weights[3] += w3;
+        unweighted_sums[0] += x0;
+        unweighted_sums[1] += x1;
+        unweighted_sums[2] += x2;
+        unweighted_sums[3] += x3;
+    }
+    for (&x, &w) in v_chunks.remainder().iter().zip(w_chunks.remainder()) {
+        let x = x.to_f64();
+        let w = w.to_f64();
+        weighted_sums[0] += x * w;
+        sum_weights[0] += w;
+        unweighted_sums[0] += x;
+    }
+    WeightedSum {
+        weighted_sum: weighted_sums.iter().sum(),
+        sum_weights: sum_weights.iter().sum(),
+        unweighted_sum: unweighted_sums.iter().sum(),
+        count: values.len(),
+    }
 }
 
 #[inline]

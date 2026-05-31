@@ -20,6 +20,7 @@ title: "Performance"
 * However, `reducers` is much faster than NumPy and Bottleneck for larger arrays, NaN-aware reductions (`nan*` functions), and especially for larger stacks.
 * `std` and `var` are common bottlenecks in data processing pipelines. Axis-0 variance and standard deviation stream contiguous chunks from each stack level directly, while still using the stable two-pass formula described below.
   * For some use cases, `return_mean` can even skip additional call of `mean` and save computation time.
+* Weighted `sum` and `nansum` follow the same idea: `return_sum_weights=True` and `return_unweighted_sum=True` expose values already accumulated by the fused weighted scan, avoiding separate passes when those totals are needed together.
 
 ## How To Read The Numbers
 
