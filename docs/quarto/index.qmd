@@ -91,7 +91,7 @@ percentile(a, q, axis=None, *, validate=True)   # q in [0, 100], linear interp
 - `validate=False` skips input prep for trusted hot loops where the caller already has a contiguous supported kernel dtype (`float32`, `float64`, bool, or a NumPy integer dtype). Integer and bool arrays are reduced directly without an up-front float copy; complex and object arrays are unsupported.
 - Integer and bool `min`, `nanmin`, `max`, `nanmax`, and `lmedian` preserve dtype (not converted to float). `mean`, `sum`, `var/std`, `median`, and percentiles still return floating results.
 - `minmax` is the fused plain endpoint reducer for `axis=None`; `nanminmax` is the fused NaN-skipping endpoint reducer for `axis=None`. Axis calls currently return two separate axis reductions.
-- Not a literal drop-in: no `out`, `keepdims`, `where`, `dtype`, or percentile `method` (linear only) in v0.2.
+- Not a literal drop-in: no `out`, `keepdims`, `where`, `dtype`, or percentile `method` (linear only).
 - Weighted averages support `weights=None`, weights with the same shape as `a`, and 1-D weights along supported axes. A zero sum of retained weights raises `ZeroDivisionError`.
 
 See [Performance](performance.qmd) for the kernel techniques and benchmarks.
