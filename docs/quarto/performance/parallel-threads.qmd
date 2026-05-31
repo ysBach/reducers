@@ -1,0 +1,169 @@
+---
+title: "Parallel Threads"
+---
+
+`reducers` uses Rayon inside Rust for selected reductions. Parallelism is a
+performance decision only; it does not change the mathematical result.
+
+::: {.callout-tip title="TL;DR"}
+Start with the defaults. If your workload is stable, run
+`python -m reducers.autotuner` once on the target machine. The chosen grains are
+saved and automatically applied by future `import reducers` calls.
+:::
+
+## Grain Model
+
+For axis reductions, parallelism is across output elements. A `(100, 100, 100)`
+array reduced with `axis=0` produces `100 * 100 = 10000` output elements.
+
+The useful work also depends on the reducing-axis length. A `(5, 100, 100)`
+stack and a `(100, 100, 100)` stack both produce 10000 output values, but the
+second one does 20x more scan work per output. `reducers` therefore estimates:
+
+```text
+work = output_count * reducing_axis_length
+chunks = clamp(work / grain, min=1, max=rayon_thread_count)
+```
+
+`chunks == 1` uses the serial path. Larger workloads ramp to a few Rayon chunks,
+then up to the current Rayon thread count. This avoids a hard jump from serial to
+all threads at one size.
+
+The `grain` is the approximate amount of element work needed before a Rayon task
+is worth dispatching. It is not a numerical parameter, and it does not change
+the reduction semantics.
+
+## Controls
+
+| variable | controls | default |
+|---|---|---:|
+| `RAYON_NUM_THREADS` | Rayon worker count inside Rust kernels. Set before the first Rayon use in the Python process. | Rayon default |
+| `REDUCERS_AXIS_SCAN_PLAIN_GRAIN` | Plain scan reducers: `mean`, `sum`, `min`, `max`, and `minmax`. | `262144` |
+| `REDUCERS_AXIS_SCAN_NAN_GRAIN` | NaN-aware scan reducers: `nanmean`, `nansum`, `nanmin`, `nanmax`, and `nanminmax`. | `262144` |
+| `REDUCERS_AXIS_SCAN_VAR_GRAIN` | Variance-style reducers: `var`, `std`, `nanvar`, and `nanstd`. | `262144` |
+| `REDUCERS_AXIS_WEIGHTED_GRAIN` | Weighted reducers: `average` and `nanaverage`. | `262144` |
+| `REDUCERS_AXIS_ORDER_MEDIAN_GRAIN` | Median-style reducers: `median`, `lmedian`, and `nanmedian`. | `1024` |
+| `REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN` | Percentile-style reducers: `percentile`, `quantile`, `nanpercentile`, and `nanquantile`. | `1024` |
+| `REDUCERS_MINMAX_1D_GRAIN` | Work per Rayon chunk for 1-D endpoint scans. | `65536` |
+
+Environment variables are read lazily and cached. Put them before the Python
+command, or export them before starting a long-running Python session.
+
+For normal use, the simpler path is the autotuner:
+
+```bash
+python -m reducers.autotuner
+
+# to reset to built-in defaults:
+# python -m reducers.autotuner --reset
+```
+
+This searches grain values ($2^k$ for an integer $k$) on representative workloads, finds optimal values, and saves the result to the user config file (`~/.config/reducers/parallel_grains.json`). Note this algorithm is not mathematically rigorous - it is only an empirical approach. On later imports, `reducers` applies that file automatically.
+
+For **reproducible benchmark runs that must ignore these tuned grains**, use:
+
+```bash
+REDUCERS_IGNORE_TUNED_GRAINS=1 python your_script.py
+```
+
+The config path defaults to `~/.config/reducers/parallel_grains.json`. Override
+it with `REDUCERS_PARALLEL_GRAINS_FILE` or the autotuner's `--config` option.
+For notebooks and manual tuning loops, the same grains are also settable at
+runtime.
+
+Check the resolved settings from Python:
+
+```python
+import reducers as rd
+
+rd.get_num_threads()
+rd.get_parallel_grains()
+```
+
+Users can also tune it at runtime without writing a config file:
+
+```python
+import reducers as rd
+
+rd.set_parallel_grains({
+    "axis_scan_plain": 262_144,
+    "axis_scan_nan": 262_144,
+    "axis_scan_var": 262_144,
+    "axis_weighted": 262_144,
+    "axis_order_median": 1_024,
+    "axis_order_percentile": 1_024,
+    "minmax_1d": 65_536,
+})
+```
+
+## Measuring Grain Settings
+
+Pin both Rayon and NumPy/BLAS-style thread pools when comparing implementations:
+
+```bash
+RAYON_NUM_THREADS=8 \
+OMP_NUM_THREADS=1 \
+OPENBLAS_NUM_THREADS=1 \
+MKL_NUM_THREADS=1 \
+VECLIB_MAXIMUM_THREADS=1 \
+uv run --extra bench python benchmarks/benchmark_axis.py --dtypes float64 --ops min max
+```
+
+To compare the default, serial, and forced-parallel scan paths on representative
+stack shapes:
+
+```bash
+uv run --extra bench python benchmarks/benchmark_parallel_grains.py --dtypes float64
+```
+
+The benchmark includes:
+
+| shape | axis | reduced length | output count | why it is useful |
+|---|---:|---:|---:|---|
+| `(5, 100, 100)` | `0` | 5 | 10000 | shallow and small enough that forced Rayon overhead can dominate |
+| `(100, 100, 100)` | `0` | 100 | 10000 | same output count but much more work per output |
+| `(5, 2000, 2000)` | `0` | 5 | 4000000 | shallow reduction with enough output values to use threads well |
+
+The first case is the main caution: it has enough output values to tempt
+parallelism, but not enough total scan work to force Rayon. The wider stack
+shows the opposite: even a 5-deep reduction benefits once there are millions of
+independent output values.
+
+For one-off experiments, force serial scan reductions by making the grain larger
+than the workload:
+
+```bash
+REDUCERS_AXIS_SCAN_PLAIN_GRAIN=1000000000 \
+uv run --extra bench python benchmarks/benchmark_axis.py --dtypes float64 --ops min max
+
+# Then force early Rayon for scan reducers:
+REDUCERS_AXIS_SCAN_PLAIN_GRAIN=1 \
+uv run --extra bench python benchmarks/benchmark_axis.py --dtypes float64 --ops min max
+```
+
+Use the smaller median time for that workload. Forced parallel settings are useful for measurement, but they can slow down small outputs if used globally.
+
+For source-checkout development, the benchmark helper prints the same search in a docs-friendly format:
+
+```bash
+uv run --extra bench python benchmarks/tune_parallel.py --profile quick --max-regression 1.10
+```
+
+Treat tuned grains as workload-specific; rerun the autotuner when the target array sizes, CPU, or Rayon thread count changes.
+
+## Large 1-D Endpoint Scans
+
+The 1-D endpoint grain is separate because a 1-D reduction produces one output
+value. It applies to `min`, `max`, `minmax`, `nanmin`, `nanmax`, and `nanminmax`.
+
+Compare serial and early-parallel scans on a large vector:
+
+```bash
+REDUCERS_MINMAX_1D_GRAIN=1000000000 \
+uv run --extra bench python benchmarks/benchmark_1d.py --lengths 10000000 --ops min max minmax
+
+REDUCERS_MINMAX_1D_GRAIN=1 \
+uv run --extra bench python benchmarks/benchmark_1d.py --lengths 10000000 --ops min max minmax
+```
+
+If your best result is close to the default, keep the default. Grains are shape- and machine-dependent.

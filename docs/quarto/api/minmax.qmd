@@ -1,0 +1,31 @@
+# minmax { #reducers.minmax }
+
+```python
+minmax(a, axis=None, *, validate=True)
+```
+
+Return the minimum and maximum with NaN propagation.
+
+## Parameters {.doc-section .doc-section-parameters}
+
+<code>[**a**]{.parameter-name} [:]{.parameter-annotation-sep} [array_like]{.parameter-annotation}</code>
+
+:   Input data. Supported numeric inputs are normalized to a contiguous kernel array when `validate=True`. Computed reducers promote integer and bool inputs to ``float64``; exact selection reducers keep integer and bool dtypes where the selected value can be returned exactly. Complex and object arrays are not supported.
+
+<code>[**axis**]{.parameter-name} [:]{.parameter-annotation-sep} [None, 0, -1, or int]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Axis to reduce. ``None`` reduces the whole array. ``0`` reduces strided reducing-axis slices into the remaining shape. ``-1`` and ``ndim - 1`` reduce contiguous slices. Other axes raise ``NotImplementedError``.
+
+<code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
+
+:   If `True`, check dtype, dimensionality, contiguity, and axis validity before entering the Rust kernel. If `False`, the caller must provide a contiguous supported kernel dtype (``float32``, ``float64``, bool, or a NumPy integer dtype). `validate=False` skips dtype promotion: integer and bool arrays are reduced directly, while complex and object arrays remain unsupported.
+
+## Returns {.doc-section .doc-section-returns}
+
+<code>[]{.parameter-name} [:]{.parameter-annotation-sep} [minimum, maximum : scalar or ndarray]{.parameter-annotation}</code>
+
+:   Pair of reduction results. ``axis=None`` uses a fused one-pass Rust kernel. Axis reductions currently compute the minimum and maximum as separate reductions.
+
+## Notes {.doc-section .doc-section-notes}
+
+Plain reducers include every value, so NaN and inf propagate with IEEE / NumPy-like semantics. This is the fastest path for known-clean finite data.

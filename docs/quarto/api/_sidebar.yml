@@ -1,0 +1,36 @@
+website:
+  sidebar:
+  - contents:
+    - api/index.qmd
+    - contents:
+      - api/mean.qmd
+      - api/average.qmd
+      - api/sum.qmd
+      - api/min.qmd
+      - api/max.qmd
+      - api/median.qmd
+      - api/var.qmd
+      - api/std.qmd
+      - api/percentile.qmd
+      - api/quantile.qmd
+      section: Plain reducers
+    - contents:
+      - api/nanmean.qmd
+      - api/nanaverage.qmd
+      - api/nansum.qmd
+      - api/nanmin.qmd
+      - api/nanmax.qmd
+      - api/nanminmax.qmd
+      - api/nanmedian.qmd
+      - api/nanvar.qmd
+      - api/nanstd.qmd
+      - api/nanpercentile.qmd
+      - api/nanquantile.qmd
+      section: NaN-aware reducers
+    - contents:
+      - api/lmedian.qmd
+      - api/minmax.qmd
+      - api/count_finite.qmd
+      section: Extra reducers
+    id: api
+  - id: dummy-sidebar

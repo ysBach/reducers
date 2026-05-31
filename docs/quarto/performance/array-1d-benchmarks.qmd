@@ -1,0 +1,134 @@
+---
+title: "1-D Array Benchmarks"
+---
+
+Reduce 1-D array into a single value.
+
+Run the benchmark locally with (the script prints plain finite-data results first, then NaN-aware results):
+
+```bash
+uv run --extra bench python benchmarks/benchmark_1d.py
+```
+
+
+The benchmark prints one row per `(length, dtype, function)`. `np`, `bn`, and `rd` are trimmed median elapsed µs for NumPy, Bottleneck, and `reducers`: the fastest and slowest samples are dropped before taking the median. The `np/rd` and `bn/rd` columns are speedups relative to `reducers`; a value above `1` means `reducers` is faster. A speedup is **bolded** when **`reducers` ratio > 0.95.**
+
+Each run uses 3 warmups and 15 repeats by default.
+
+
+`average` rows use one weight per value, generated from a uniform distribution on `[0.5, 1.5)`. The `percentile`/`quantile` rows (and their `nan*` forms) request three positions, `[16, 50, 84]` (the median and +/-1 sigma).
+
+## Plain, float64
+
+These rows compare the plain path on finite data. `std` uses `ddof=1`. For
+`average`, Bottleneck has no weighted-average reducer.
+
+::: {.panel-tabset}
+
+### length 30
+
+| function | np (µs) | rd (µs) | np/rd |
+|---|---:|---:|---:|
+| `mean` | 1.09 | 0.12 | **8.76x** |
+| `average` | 2.62 | 0.29 | **8.99x** |
+| `median` | 4.49 | 0.21 | **20.93x** |
+| `sum` | 0.80 | 0.13 | **6.31x** |
+| `min` | 0.77 | 0.13 | **5.86x** |
+| `max` | 0.79 | 0.13 | **5.94x** |
+| `minmax` | 1.59 | 0.15 | **10.50x** |
+| `var` | 3.43 | 0.18 | **19.20x** |
+| `std` | 3.73 | 0.24 | **15.22x** |
+| `percentile` | 13.70 | 3.33 | **4.11x** |
+| `quantile` | 13.33 | 3.61 | **3.69x** |
+
+### length 10^4
+
+| function | np (µs) | rd (µs) | np/rd |
+|---|---:|---:|---:|
+| `mean` | 2.39 | 1.44 | **1.66x** |
+| `average` | 7.97 | 2.35 | **3.39x** |
+| `median` | 30.18 | 17.94 | **1.68x** |
+| `sum` | 1.94 | 1.41 | **1.37x** |
+| `min` | 1.31 | 1.36 | **0.97x** |
+| `max` | 1.39 | 1.35 | **1.03x** |
+| `minmax` | 2.71 | 1.73 | **1.56x** |
+| `var` | 9.45 | 3.61 | **2.62x** |
+| `std` | 9.75 | 3.85 | **2.53x** |
+| `percentile` | 47.84 | 35.67 | **1.34x** |
+| `quantile` | 49.88 | 36.17 | **1.38x** |
+
+### length 10^7
+
+| function | np (µs) | rd (µs) | np/rd |
+|---|---:|---:|---:|
+| `mean` | 1227.92 | 1267.83 | **0.97x** |
+| `average` | 4621.21 | 1884.88 | **2.45x** |
+| `median` | 78701.29 | 15925.38 | **4.94x** |
+| `sum` | 1249.25 | 1324.88 | 0.94x |
+| `min` | 967.42 | 405.79 | **2.38x** |
+| `max` | 993.17 | 395.71 | **2.51x** |
+| `minmax` | 1938.96 | 402.92 | **4.81x** |
+| `var` | 5346.92 | 3484.08 | **1.53x** |
+| `std` | 5296.96 | 3458.96 | **1.53x** |
+| `percentile` | 110336.17 | 36258.92 | **3.04x** |
+| `quantile` | 112058.12 | 36303.08 | **3.09x** |
+
+:::
+
+## NaN-aware, float64
+
+These rows compare `rd.nan*` against `np.nan*` and `bn.nan*`. `nanstd` uses
+`ddof=1`. For `nanaverage`, the NumPy baseline masks `a` and `weights` before
+calling `np.average`; Bottleneck has no weighted-average reducer.
+
+::: {.panel-tabset}
+
+### length 30
+
+| function | np (µs) | bn (µs) | rd (µs) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `nanmean` | 4.43 | 0.07 | 0.15 | **29.68x** | 0.48x |
+| `nanaverage` | 3.09 | - | 0.31 | **9.90x** | - |
+| `nanmedian` | 6.57 | 0.10 | 0.24 | **27.05x** | 0.41x |
+| `nansum` | 1.76 | 0.07 | 0.15 | **11.94x** | 0.48x |
+| `nanmin` | 1.55 | 0.06 | 0.15 | **10.45x** | 0.39x |
+| `nanmax` | 1.56 | 0.06 | 0.14 | **10.77x** | 0.40x |
+| `nanminmax` | 3.18 | 0.11 | 0.17 | **19.01x** | 0.66x |
+| `nanvar` | 9.59 | 0.12 | 0.20 | **46.78x** | 0.58x |
+| `nanstd` | 10.01 | 0.16 | 0.27 | **36.74x** | 0.59x |
+| `nanpercentile` | 17.20 | - | 3.45 | **4.98x** | - |
+| `nanquantile` | 16.33 | - | 3.75 | **4.35x** | - |
+
+### length 10^4
+
+| function | np (µs) | bn (µs) | rd (µs) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `nanmean` | 12.70 | 11.93 | 3.14 | **4.04x** | **3.80x** |
+| `nanaverage` | 16.97 | - | 3.17 | **5.36x** | - |
+| `nanmedian` | 33.50 | 17.60 | 17.63 | **1.90x** | **1.00x** |
+| `nansum` | 7.57 | 11.83 | 3.21 | **2.36x** | **3.69x** |
+| `nanmin` | 2.16 | 4.94 | 1.42 | **1.52x** | **3.49x** |
+| `nanmax` | 2.26 | 4.91 | 1.40 | **1.62x** | **3.51x** |
+| `nanminmax` | 4.46 | 9.94 | 1.75 | **2.54x** | **5.67x** |
+| `nanvar` | 28.98 | 25.98 | 6.10 | **4.75x** | **4.26x** |
+| `nanstd` | 29.20 | 27.26 | 6.76 | **4.32x** | **4.03x** |
+| `nanpercentile` | 56.90 | - | 39.00 | **1.46x** | - |
+| `nanquantile` | 53.98 | - | 39.46 | **1.37x** | - |
+
+### length 10^7
+
+| function | np (µs) | bn (µs) | rd (µs) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `nanmean` | 6771.87 | 11630.00 | 3088.29 | **2.19x** | **3.77x** |
+| `nanaverage` | 12776.17 | - | 2624.00 | **4.87x** | - |
+| `nanmedian` | 74297.87 | 48408.13 | 17199.29 | **4.32x** | **2.81x** |
+| `nansum` | 5161.75 | 12396.83 | 3069.04 | **1.68x** | **4.04x** |
+| `nanmin` | 992.83 | 4822.29 | 390.50 | **2.54x** | **12.35x** |
+| `nanmax` | 997.17 | 4866.54 | 380.50 | **2.62x** | **12.79x** |
+| `nanminmax` | 1971.25 | 9726.46 | 419.71 | **4.70x** | **23.17x** |
+| `nanvar` | 17805.46 | 25977.75 | 6191.75 | **2.88x** | **4.20x** |
+| `nanstd` | 17780.58 | 26609.75 | 6241.54 | **2.85x** | **4.26x** |
+| `nanpercentile` | 103852.04 | - | 37557.79 | **2.77x** | - |
+| `nanquantile` | 104492.58 | - | 37664.46 | **2.77x** | - |
+
+:::

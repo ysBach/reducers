@@ -1,0 +1,49 @@
+---
+title: "Performance"
+---
+
+`reducers` is built for fast reductions over NumPy arrays.
+
+## Short Version
+
+| workload | local result |
+|---|---|
+| Small (≲ 100) 1-D arrays | Faster than NumPy for most cases, but Bottleneck can still win for `nan*` cases. |
+| Plain `axis=0` scans (`mean` / `sum` / `min` / `max`) on shallow, small-output stacks | Mixed: often near NumPy, sometimes slower. See Parallel Threads for the crossover. |
+| NaN-aware `axis=0` `nanmean` / `nanaverage` / `nansum` / `nanvar` on stacks | Faster than NumPy; also faster than Bottleneck except the shallowest stacks. |
+| all other cases (order statistics, `[nan]var`/`std`, larger arrays, `axis=-1`) | `reducers` is usually much faster than NumPy and Bottleneck locally. |
+
+* NumPy functions such as `mean` and `sum` are extremely optimized and fast
+  when the workload is tiny, so `reducers` does not try to force parallelism for
+  shallow, small-output stacks.
+* However, `reducers` is much faster than NumPy and Bottleneck for larger arrays, NaN-aware reductions (`nan*` functions), and especially for larger stacks.
+* Also the `std` or `var` functions are often bottlenecks in data processing pipelines, and `reducers` is much faster than NumPy and Bottleneck for these reductions.
+  * For some use cases, `return_mean` can even skip additional call of `mean` and save computation time.
+
+## How To Read The Numbers
+
+Benchmark ratios are reported as `np/rd` and `bn/rd`; values above `1` mean
+`reducers` is faster.
+
+## Recorded Environment
+
+The benchmark tables in these docs were generated with:
+
+```txt
+python: 3.13.11 (CPython)
+reducers: 0.1.0
+numpy: 2.4.6
+bottleneck: 1.6.0
+os: macOS-26.5-arm64-arm-64bit-Mach-O
+kernel: Darwin 25.5.0 Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:15 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6041
+machine: arm64
+processor: arm
+reducers threads: 14
+REDUCERS_AXIS_SCAN_PLAIN_GRAIN=262144
+REDUCERS_AXIS_SCAN_NAN_GRAIN=262144
+REDUCERS_AXIS_SCAN_VAR_GRAIN=4096
+REDUCERS_AXIS_WEIGHTED_GRAIN=262144
+REDUCERS_AXIS_ORDER_MEDIAN_GRAIN=1024
+REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN=1024
+REDUCERS_MINMAX_1D_GRAIN=16384
+```

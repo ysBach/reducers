@@ -1,0 +1,12 @@
+/* Landing-page and API readability, matching sibling project docs. */
+pre,
+pre code,
+div.sourceCode pre,
+div.sourceCode pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+main table {
+  width: 100%;
+}

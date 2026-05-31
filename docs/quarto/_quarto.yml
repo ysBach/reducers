@@ -1,0 +1,94 @@
+project:
+  type: website
+  output-dir: _site
+
+metadata-files:
+  - api/_sidebar.yml
+
+website:
+  title: "reducers"
+  site-url: https://ysbach.github.io/reducers/
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - text: Performance
+        menu:
+          - href: performance.qmd
+            text: "Overview"
+          - href: performance/max-performance.qmd
+            text: "How It Gets Fast"
+          - href: performance/parallel-threads.qmd
+            text: "Parallel Threads"
+          - href: performance/array-1d-benchmarks.qmd
+            text: "1-D Array Benchmarks"
+          - href: performance/axis-benchmarks.qmd
+            text: "2-D Stack Axis Benchmarks"
+      - href: api/index.qmd
+        text: API reference
+      - href: rust-api.qmd
+        text: Rust API
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: false
+    code-copy: true
+    css:
+      - styles.css
+      - api/_styles-quartodoc.css
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  cache: false
+  freeze: auto
+
+quartodoc:
+  package: reducers
+  parser: numpy
+  dynamic: true
+  rewrite_all_pages: true
+  dir: api
+  sidebar: api/_sidebar.yml
+  css: api/_styles-quartodoc.css
+  sections:
+    - title: Plain reducers
+      desc: NumPy-like reducers where NaN and infinity participate as ordinary IEEE values.
+      contents:
+        - mean
+        - average
+        - sum
+        - min
+        - max
+        - median
+        - var
+        - std
+        - percentile
+        - quantile
+    - title: NaN-aware reducers
+      desc: NumPy nan* parity by default, with ignore_inf=True for finite-only reductions.
+      contents:
+        - nanmean
+        - nanaverage
+        - nansum
+        - nanmin
+        - nanmax
+        - nanminmax
+        - nanmedian
+        - nanvar
+        - nanstd
+        - nanpercentile
+        - nanquantile
+    - title: Extra reducers
+      desc: Reducers-specific helpers.
+      contents:
+        - lmedian
+        - minmax
+        - count_finite
+  renderer:
+    style: markdown
+    display_name: short
+    table_style: description-list

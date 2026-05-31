@@ -1,0 +1,208 @@
+---
+title: "How It Gets Fast"
+---
+
+Exact timings vary with shape, dtype, NaN density, reducing-axis length, memory
+layout, CPU, and thread settings. Treat printed benchmark numbers as local
+measurements, not universal constants.
+
+## Kernel Algorithms
+
+The package is intentionally small. Most of the speed comes from using a narrow
+NumPy-like subset and choosing kernels that match that subset directly. The
+techniques below are standard numerical-kernel techniques: fixed small
+accumulator sets, stable two-pass variance, selection instead of full sorting
+for order statistics, and layout-specific axis loops. They are implementation
+choices in this crate, not claimed as new algorithms.
+
+### Scan Reducers
+
+`mean`, `sum`, `nanmean`, and `nansum` use one scan with a small fixed set of
+independent accumulators. Instead of updating one running total on every
+element, the loop updates separate totals and merges them at the end.
+
+That matters because a single running total creates a long dependency chain:
+each addition must wait for the previous addition to finish. Multiple
+accumulators give the CPU and LLVM more independent work to schedule, reduce
+loop-carried dependencies, and usually make autovectorization easier.
+
+The scan kernels use four independent accumulators, fixed at compile time. Four
+lanes map onto common SIMD register widths (four `f64` in a 256-bit register,
+four `f32` in a 128-bit register) and give LLVM enough independent work to
+vectorize the loop. The optimum is hardware-dependent, but four is a reasonable
+default across the targets here; the count is a build-time constant rather than
+a runtime option.
+
+`mean` and `sum` accumulate into `f64` even for `float32` input. That improves
+numerical stability and keeps integer/bool computed reducers on the same public
+floating-result path, but it also means plain `float32` reductions are not
+trying to reproduce NumPy's lower-precision accumulation speed at all costs.
+
+### NaN-Aware Scans
+
+NaN-aware scans inline the selected policy into the Rust loop:
+
+- `SkipNan` skips NaNs and keeps `+/-inf`, matching NumPy `nan*` reducers.
+- `SkipNonFinite` skips NaNs and infinities for `ignore_inf=True`.
+
+This avoids building masked temporary arrays for common `nan*` paths. That is
+mostly an explanation for NumPy comparisons. Bottleneck already has specialized
+NaN-aware C reducers, so wins over Bottleneck come from other factors in the
+measured cases: larger arrays where Rayon can help, fused endpoint scans,
+supported axis layouts, or order-statistic kernels. For tiny 1-D NaN-aware
+calls, Bottleneck can still be faster.
+
+For weighted averages, skipped values also skip their weights, so `nanaverage`
+does not need to materialize filtered value and weight arrays before reducing.
+
+### Variance And Standard Deviation
+
+`var` and `std` use a stable two-pass variance: first compute the mean, then
+accumulate squared deviations. The classic one-pass form,
+`sum(x*x) - sum(x) * mean`, is faster on paper but can catastrophically cancel
+for large-offset data. For example, the true variance of
+`[1e16, 1e16 + 2, 1e16 + 4]` is `8/3 ≈ 2.67`, but each `x*x` is about `1e32`,
+where the `float64` step between representable values is larger than the `+2`
+and `+4` offsets — so `sum(x*x)` discards exactly the information the variance
+depends on, and `sum(x*x) - sum(x) * mean` can come out as `0` or negative. The
+two-pass form subtracts the mean first, so it squares the small deviations
+`-2, 0, +2` directly and stays exact. The second pass keeps the same
+independent-accumulator scan shape for the squared deviations, so the numerical
+fix does not throw away the main scan optimization.
+
+`std` is computed as `sqrt(var)` using the same variance kernel. `nanvar` and
+`nanstd` apply the same scan policies as the other `nan*` reducers.
+
+### Min, Max, And Minmax
+
+Plain `min` and `max` must propagate NaN like NumPy. The numeric comparison loop
+therefore uses comparisons that return the numeric value when exactly one side
+is NaN, and return NaN only when both sides are NaN. A separate NaN flag records
+whether the plain reducer must propagate NaN at the end. This keeps the hot
+comparison path branch-light while preserving plain NumPy semantics.
+
+`nanmin` and `nanmax` use the same comparison shape without the final NaN
+propagation step. With `ignore_inf=True`, the loop adds an `is_finite` filter.
+
+`minmax` and `nanminmax` are fused 1-D scans for callers that need both
+endpoints. They use the same fixed-lane and Rayon chunk-reduction strategy as
+`min` and `max`, so they avoid reading the input twice. Axis reductions
+currently return endpoint pairs as two separate axis reductions, because the
+fused 1-D API returns a scalar pair while axis reductions return arrays.
+
+### Order Statistics
+
+`median` and `lmedian` copy only the reduced slice into scratch memory. For a
+single rank, they use selection rather than a full sort, avoiding `O(n log n)`
+work when only the middle value is needed. This is the standard order-statistic
+approach, not a package-specific invention. `lmedian` returns the lower
+selected middle value for even-length inputs.
+
+`percentile` and `quantile` map each requested position to the two integer
+ranks that bracket it in sorted order (the floor and ceiling rank used for
+linear interpolation), then deduplicate those ranks across all requests. Call
+the result `k`: the number of *distinct ranks* actually needed. Note this is not
+the number of requested percentiles — `[16, 50, 84]` is three percentiles but
+needs at most six ranks, and fewer after dedup.
+
+The kernel then picks one of two strategies by comparing `k` with
+`floor(log2(n))`, where `n` is the filtered input length:
+
+- If `k <= floor(log2(n))`, it runs `k` partial selections (`select_nth`), each
+  roughly `O(n)`, for about `O(k * n)` total.
+- Otherwise it sorts the scratch buffer once, `O(n log n)`, then reads each rank
+  off the sorted array.
+
+`floor(log2(n))` is simply the break-even point: a sort costs about
+`n * log2(n)`, so doing `k` linear selections is cheaper only while `k` stays
+below `log2(n)`. For example, with `n = 1,000,000`, `floor(log2(n)) = 19`, and
+`[16, 50, 84]` needs at most 6 ranks. Since `6 <= 19`, the kernel does ~6 linear
+selection passes (about `6n` work) instead of a full sort (about `20n`). Asking
+for ~50 evenly spaced percentiles needs more than 19 distinct ranks, so it sorts
+once instead.
+
+### Integer And Bool Inputs
+
+Integer and bool arrays cannot contain NaN, and that is the speedup: a `nan*`
+reducer has nothing to skip, so it must return exactly the plain result. The
+direct integer/bool kernels use this — they carry no scan policy and no
+NaN/finite branch at all, so `nanmin`, `nanmean`, `nansum`, and the rest run the
+same NaN-free code as their plain counterparts, with no masking and no
+per-element `isfinite` test. `ignore_inf` is likewise a no-op for these dtypes.
+(`validate=False` dispatches integer input straight to these kernels; with
+`validate=True`, computed reducers first promote to `float64`, so the saving
+applies on the trusted hot-loop path.)
+
+Two output behaviors follow from what each reducer returns:
+
+- Computed reducers (`mean`, `sum`, `average`, `var`, `std`, `median`, and
+  percentiles) accumulate in `f64` and return floating results.
+- Exact-selection reducers (`min`, `nanmin`, `max`, `nanmax`, `lmedian`) return
+  a value that already exists in the input, so they keep the integer/bool dtype
+  via direct typed kernels.
+
+## Axis Kernels
+
+Axis support is deliberately limited to the layouts that can be made fast
+without hidden moves:
+
+### Last Axis
+
+`axis=-1` and `axis=ndim-1` reduce the last (contiguous) axis. Any N-D input is
+reshaped to a 2-D `(outer, n)` view, where `n` is the length of the reduced axis
+and `outer` is the product of all the other axes. A 3-D array still collapses to
+2-D: a `(100, 100, 100)` cube reduced along `axis=-1` becomes
+`(100 * 100, 100) = (10000, 100)`, so each of the 10,000 output elements reduces
+one contiguous length-100 row. Because the array is C-contiguous and the reduced
+axis is already last, this reshape is a free view (no copy); the flat
+`outer`-length result is then reshaped back to the kept shape `(100, 100)`. Scan
+reducers and order statistics both benefit because the reduced values are
+adjacent in memory.
+
+### Axis 0
+
+`axis=0` mirrors this with the reduced axis first: the input is reshaped to a
+2-D `(n, outer)` view, where `n` is the length of axis 0 and `outer` is the
+product of the remaining axes. A `(31, 100, 100)` stack reduced along `axis=0`
+becomes `(31, 100 * 100) = (31, 10000)`, again a free reshape. For `mean`,
+`sum`, `min`, `max`, and weighted average, the kernels stream contiguous input
+rows and update output chunks directly, instead of gathering one short strided
+slice per output element.
+
+Plain `axis=0` min/max keep a per-output NaN mask so the numeric comparison loop
+can stay branch-light while still propagating NaNs. NaN-aware min/max do not
+need that final propagation mask.
+
+Axis-0 order statistics still gather each reducing-axis slice into a scratch
+buffer. That is intentional: `nanmedian`, `nanpercentile`, and `nanquantile`
+need compact mutable values for selection or sorting anyway.
+
+Performance depends on the reducer and the reducing-axis length. In the local
+benchmark (a `(100, 100, 100)` cube and short `(11, 100, 100)` / `(31, 100, 100)`
+stacks):
+
+- Order statistics dominate, and the margin grows with stack depth, because
+  `reducers` uses narrow per-slice kernels with less axis machinery: roughly 5x
+  at depth 11, 11x at depth 31, and 20x on the 100-deep cube for `median`.
+  NumPy's `median` also uses partition, so this is not a full-sort comparison.
+  NumPy's `nanpercentile` is ~100x+ slower because its axis path removes NaNs
+  per slice and then runs general quantile handling.
+- NaN-aware scans (`nanmean`/`nanvar`/`nansum`) beat NumPy at every depth; on the
+  shortest 11-deep stack Bottleneck still edges the very cheapest ones.
+- Cheap plain scans (`mean`/`sum`/`min`/`max`) favor NumPy's lean strided C loop
+  when the reducing axis and output are both small. `reducers` uses work-count
+  grains so those cases stay serial, while deeper stacks and wide shallow
+  stacks can still use Rayon. The benchmark tables report `float32` and
+  `float64` separately because the crossover differs by dtype.
+- Weighted `average` on `axis=0` carries more per-row overhead and trails NumPy
+  for short stacks; on `axis=-1` (contiguous rows) it beats NumPy.
+
+### Weights
+
+Axis weighted reductions accept either full-shape weights or 1-D weights along
+the reducing axis. For 1-D weights, `reducers` does not expand the weights into
+a full temporary array. The axis-0 weighted path streams the data rows and
+reuses the same per-row weight when weights are 1-D.
+
+For axis reductions, parallelism is across output elements. Scratch buffers are
+allocated once per Rayon worker, not once per output element.

@@ -1,0 +1,35 @@
+# nanmedian { #reducers.nanmedian }
+
+```python
+nanmedian(a, axis=None, *, ignore_inf=False, validate=True)
+```
+
+Return the median while skipping NaN values.
+
+## Parameters {.doc-section .doc-section-parameters}
+
+<code>[**a**]{.parameter-name} [:]{.parameter-annotation-sep} [array_like]{.parameter-annotation}</code>
+
+:   Input data. Supported numeric inputs are normalized to a contiguous kernel array when `validate=True`. Computed reducers promote integer and bool inputs to ``float64``; exact selection reducers keep integer and bool dtypes where the selected value can be returned exactly. Complex and object arrays are not supported.
+
+<code>[**axis**]{.parameter-name} [:]{.parameter-annotation-sep} [None, 0, -1, or int]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Axis to reduce. ``None`` reduces the whole array. ``0`` reduces strided reducing-axis slices into the remaining shape. ``-1`` and ``ndim - 1`` reduce contiguous slices. Other axes raise ``NotImplementedError``.
+
+<code>[**ignore_inf**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
+
+:   If `False`, skip only NaN values and keep ``+/-inf`` values, matching NumPy's ``nan*`` reducers. If `True`, skip all non-finite values.
+
+<code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
+
+:   If `True`, check dtype, dimensionality, contiguity, and axis validity before entering the Rust kernel. If `False`, the caller must provide a contiguous supported kernel dtype (``float32``, ``float64``, bool, or a NumPy integer dtype). `validate=False` skips dtype promotion: integer and bool arrays are reduced directly, while complex and object arrays remain unsupported.
+
+## Returns {.doc-section .doc-section-returns}
+
+<code>[**out**]{.parameter-name} [:]{.parameter-annotation-sep} [float or ndarray]{.parameter-annotation}</code>
+
+:   Reduction result. ``axis=None`` returns a Python ``float``. Axis reductions return an array with the reduced axis removed.
+
+## Notes {.doc-section .doc-section-notes}
+
+NaN-aware reducers skip NaN values directly, without building a filtered copy of the input.

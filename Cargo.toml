@@ -1,0 +1,38 @@
+[package]
+name = "reducers"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.84"
+description = "Rust-backed reductions for NumPy arrays (plain + NaN-aware)"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/ysbach/reducers"
+homepage = "https://ysbach.github.io/reducers/"
+documentation = "https://docs.rs/reducers"
+keywords = ["numpy", "reduction", "statistics", "nan", "pyo3"]
+categories = ["algorithms", "science"]
+include = [
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/src/**/*.rs",
+]
+
+[lib]
+name = "reducers"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rayon = "1.10"
+pyo3 = { version = "0.28", features = ["abi3-py310"], optional = true }
+numpy = { version = "0.28", optional = true }
+
+[features]
+default = []
+python = ["dep:pyo3", "dep:numpy"]
+extension-module = ["python", "pyo3/extension-module"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

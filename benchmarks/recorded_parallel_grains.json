@@ -1,0 +1,9 @@
+{
+  "axis_order_median": 1024,
+  "axis_order_percentile": 1024,
+  "axis_scan_nan": 262144,
+  "axis_scan_plain": 262144,
+  "axis_scan_var": 4096,
+  "axis_weighted": 262144,
+  "minmax_1d": 16384
+}

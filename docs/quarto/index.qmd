@@ -1,0 +1,131 @@
+---
+title: "reducers"
+---
+
+Shortname `rd`.
+
+Rust-backed reduction functions for NumPy arrays - plain (numpy-like) and NaN-aware. The functions I implemented are those listed in the [numba](https://numba.pydata.org/numba-doc/dev/reference/numpysupported.html#reductions) documentation.
+
+The target is
+
+1. much faster than numpy in many use cases,
+2. much faster than bottleneck in many use cases, and
+3. especially maximum performance for median and variance calculations, which are often bottlenecks in data processing pipelines.
+
+Even though `reducers` is ≳2x slower than bottleneck for an n=30 1-D array (dominated by Rust overhead), it becomes ≳10 times faster than bottleneck for nD-combining larger arrays.
+
+## After Installation
+
+Run the autotuner once on the machine where `reducers` will run:
+
+```bash
+python -m reducers.autotuner
+```
+
+It saves parallel-grain settings for that CPU and workload profile. Future
+`import reducers` calls apply those settings automatically. The built-in
+defaults are still valid; use `python -m reducers.autotuner --reset` to remove
+the saved tuning file and return to them.
+
+## First-Look API
+
+```python
+import reducers as rd
+
+# Plain: mean, min, max, ...
+rd.mean(a)                     # include all values; NaN/inf propagate (np.mean)
+
+# NaN-aware:
+rd.nanmean(a)                  # skip NaN, keep inf (== np.nanmean behavior)
+rd.nanmean(a, ignore_inf=True) # also drop +/-inf (finite-only)
+```
+
+The same plain vs. `nan*` pattern applies to `sum`, `min`, `max`, `minmax`, `median`, `std`, `var`, `percentile`, `quantile`, and weighted `average`, plus the extras `lmedian` (lower value-selecting median) and `count_finite`.
+
+Axis reductions cover the two layouts optimized by the Rust kernels:
+
+```python
+rd.nanmedian(stack, axis=0)      # reduce a stack shaped (N, H, W)
+rd.nanmean(rows, axis=-1)        # reduce contiguous trailing slices
+rd.nanpercentile(stack, [16, 50, 84], axis=0)
+```
+
+You may use:
+
+```python
+try:
+    import reducers as rd
+    mean = rd.mean
+except ImportError:
+    import numpy as np
+    mean = np.mean
+```
+to completely replace numpy/bottleneck reductions with `reducers` in your code for the available reduction functions.
+
+## Semantics
+One additional parameter is `ignore_inf` for `nan*` functions:
+
+| | NaN | +/-inf |
+|---|---|---|
+| `mean` / `median` / ... (plain) | propagate | propagate (IEEE) |
+| `nanmean` / `nanmedian` / ... | skip (`np.nan*` parity) | **keep** |
+| `nan*(..., ignore_inf=True)` | skip | skip (finite-only) |
+
+## API shape (numpy-like *subset*)
+
+```python
+mean(a, axis=None, *, validate=True)
+nanmean(a, axis=None, *, ignore_inf=False, validate=True)
+average(a, weights=None, axis=None, *, validate=True)
+nanaverage(a, weights=None, axis=None, *, ignore_inf=False, validate=True)
+var(a, axis=None, ddof=0, *, return_mean=False, validate=True)
+std(a, axis=None, ddof=0, *, return_mean=False, validate=True)
+minmax(a, axis=None, *, validate=True)
+nanminmax(a, axis=None, *, ignore_inf=False, validate=True)
+percentile(a, q, axis=None, *, validate=True)   # q in [0, 100], linear interp
+```
+
+**Important notes**:
+
+- `axis` may be `None` (default, whole-array), `0` or `-1` (identical to `a.ndim - 1`); other axes raise `NotImplementedError`. This keeps hidden transpose/copy costs out of the API and lets the Rust kernels specialize for the supported layouts.
+- `validate=False` skips input prep for trusted hot loops where the caller already has a contiguous supported kernel dtype (`float32`, `float64`, bool, or a NumPy integer dtype). Integer and bool arrays are reduced directly without an up-front float copy; complex and object arrays are unsupported.
+- Integer and bool `min`, `nanmin`, `max`, `nanmax`, and `lmedian` preserve dtype (not converted to float). `mean`, `sum`, `var/std`, `median`, and percentiles still return floating results.
+- `minmax` is the fused plain endpoint reducer for `axis=None`; `nanminmax` is the fused NaN-skipping endpoint reducer for `axis=None`. Axis calls currently return two separate axis reductions.
+- Not a literal drop-in: no `out`, `keepdims`, `where`, `dtype`, or percentile `method` (linear only) in v0.1.
+- Weighted averages support `weights=None`, weights with the same shape as `a`, and 1-D weights along supported axes. A zero sum of retained weights raises `ZeroDivisionError`.
+
+See [Performance](performance.qmd) for the kernel techniques and benchmarks.
+
+## Rust Crate Use
+
+`reducers` is also a Rust crate. The kernel modules do not depend on PyO3 or
+NumPy unless the Python extension feature is enabled.
+
+```toml
+[dependencies]
+reducers = { path = "/path/to/reducers" }
+```
+
+```rust
+use reducers::{reducers_1d, ScanPolicy};
+
+let values = [1.0_f64, 2.0, f64::NAN, 4.0];
+
+assert!(reducers_1d::mean(&values, ScanPolicy::AllValues).is_nan());
+assert_eq!(reducers_1d::mean(&values, ScanPolicy::SkipNan), 7.0 / 3.0);
+```
+
+The main Rust entry points are:
+
+| module | use case |
+|---|---|
+| `reducers_1d` | Whole-slice reducers such as `mean`, `nanmean`-style scans, order statistics, weighted averages, and integer/bool kernels. |
+| `axis` | Normalized 2-D axis kernels used by the Python layer; useful when the caller already controls layout. |
+| `finite::ScanPolicy` | Shared scan policy: plain all-values, trusted finite, skip-NaN, or finite-only. |
+| `parallel` | Runtime thread and grain controls. |
+
+Build local Rust API docs with:
+
+```bash
+cargo doc --no-default-features --open
+```

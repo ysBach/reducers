@@ -1,0 +1,46 @@
+# Function reference {.doc .doc-index}
+
+## Plain reducers
+
+NumPy-like reducers where NaN and infinity participate as ordinary IEEE values.
+
+| | |
+| --- | --- |
+| [mean](mean.qmd#reducers.mean) | Return the arithmetic mean with NaN/inf propagation. |
+| [average](average.qmd#reducers.average) | Return the weighted average with NaN/inf propagation. |
+| [sum](sum.qmd#reducers.sum) | Return the sum with NaN/inf propagation. |
+| [min](min.qmd#reducers.min) | Return the minimum with NaN propagation. |
+| [max](max.qmd#reducers.max) | Return the maximum with NaN propagation. |
+| [median](median.qmd#reducers.median) | Return the median with NaN propagation. |
+| [var](var.qmd#reducers.var) | Return the variance with NaN/inf propagation. |
+| [std](std.qmd#reducers.std) | Return the standard deviation with NaN/inf propagation. |
+| [percentile](percentile.qmd#reducers.percentile) | Return linear-interpolation percentiles with NaN propagation. |
+| [quantile](quantile.qmd#reducers.quantile) | Return linear-interpolation quantiles with NaN propagation. |
+
+## NaN-aware reducers
+
+NumPy nan* parity by default, with ignore_inf=True for finite-only reductions.
+
+| | |
+| --- | --- |
+| [nanmean](nanmean.qmd#reducers.nanmean) | Return the arithmetic mean while skipping NaN values. |
+| [nanaverage](nanaverage.qmd#reducers.nanaverage) | Return the weighted average while skipping NaN values. |
+| [nansum](nansum.qmd#reducers.nansum) | Return the sum while skipping NaN values. |
+| [nanmin](nanmin.qmd#reducers.nanmin) | Return the minimum while skipping NaN values. |
+| [nanmax](nanmax.qmd#reducers.nanmax) | Return the maximum while skipping NaN values. |
+| [nanminmax](nanminmax.qmd#reducers.nanminmax) | Return the minimum and maximum while skipping NaN values. |
+| [nanmedian](nanmedian.qmd#reducers.nanmedian) | Return the median while skipping NaN values. |
+| [nanvar](nanvar.qmd#reducers.nanvar) | Return the variance while skipping NaN values. |
+| [nanstd](nanstd.qmd#reducers.nanstd) | Return the standard deviation while skipping NaN values. |
+| [nanpercentile](nanpercentile.qmd#reducers.nanpercentile) | Return linear-interpolation percentiles while skipping NaN values. |
+| [nanquantile](nanquantile.qmd#reducers.nanquantile) | Return linear-interpolation quantiles while skipping NaN values. |
+
+## Extra reducers
+
+Reducers-specific helpers.
+
+| | |
+| --- | --- |
+| [lmedian](lmedian.qmd#reducers.lmedian) | Return the lower value-selecting median while skipping NaN values. |
+| [minmax](minmax.qmd#reducers.minmax) | Return the minimum and maximum with NaN propagation. |
+| [count_finite](count_finite.qmd#reducers.count_finite) | Return the number of finite values. |
