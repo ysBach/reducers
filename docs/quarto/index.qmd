@@ -2,7 +2,7 @@
 title: "reducers"
 ---
 
-Shortname `rd`.
+**Reduction** functions + **Rust(rs)**, shortname `rd`.
 
 Rust-backed reduction functions for NumPy arrays - plain (numpy-like) and NaN-aware. The functions I implemented are those listed in the [numba](https://numba.pydata.org/numba-doc/dev/reference/numpysupported.html#reductions) documentation.
 
