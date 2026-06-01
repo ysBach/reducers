@@ -32,24 +32,24 @@ from ._validation import (
 )
 
 # ScanPolicy codes mirrored from src/finite.rs.
-_ALL_VALUES = 0
+_ALLVALS = 0
 _SKIP_NAN = 2
-_SKIP_NONFINITE = 3
+_SKIP_NONFIN = 3
 
 # Kind codes mirrored from reducers_1d::Kind.
 _K_MEAN = 0
 _K_SUM = 1
 _K_MIN = 2
 _K_MAX = 3
-_K_MEDIAN = 4
-_K_LMEDIAN = 5
+_K_MED = 4
+_K_LMED = 5
 _K_VAR = 6
 _K_STD = 7
-_K_COUNT_FINITE = 8
+_K_COUNT_FIN = 8
 
 
 def _nan_policy(ignore_inf: bool) -> int:
-    return _SKIP_NONFINITE if ignore_inf else _SKIP_NAN
+    return _SKIP_NONFIN if ignore_inf else _SKIP_NAN
 
 
 def _axis_scalar(a, axis, kind, policy, *, ddof=0, validate=True, preserve_dtype=False):
@@ -70,10 +70,10 @@ def _axis_pct(a, q, axis, policy, *, percent, validate):
 
 def _weighted(a, weights, axis, policy, validate):
     if weights is None:
-        if policy == _ALL_VALUES:
+        if policy == _ALLVALS:
             return mean(a, axis=axis, validate=validate)
         return nanmean(
-            a, axis=axis, ignore_inf=policy == _SKIP_NONFINITE, validate=validate
+            a, axis=axis, ignore_inf=policy == _SKIP_NONFIN, validate=validate
         )
     if axis is not None:
         arr2, w_arr, weights_1d, axis_last, out_shape = prepare_weighted_axis(
@@ -125,8 +125,8 @@ def _sum(a, axis, weights, policy, return_sum_weights, return_unweighted_sum, va
 def mean(a, axis=None, *, validate=True):
     """Arithmetic mean; NaN/inf propagate (numpy ``mean`` semantics)."""
     if axis is not None:
-        return _axis_scalar(a, axis, _K_MEAN, _ALL_VALUES, validate=validate)
-    return _core.mean_1d(prepare_1d(a, validate=validate), _ALL_VALUES)
+        return _axis_scalar(a, axis, _K_MEAN, _ALLVALS, validate=validate)
+    return _core.mean_1d(prepare_1d(a, validate=validate), _ALLVALS)
 
 
 def nanmean(a, axis=None, *, ignore_inf=False, validate=True):
@@ -139,7 +139,7 @@ def nanmean(a, axis=None, *, ignore_inf=False, validate=True):
 
 def average(a, weights=None, axis=None, *, validate=True):
     """Weighted average; with ``weights=None`` this is equivalent to ``mean``."""
-    return _weighted(a, weights, axis, _ALL_VALUES, validate)
+    return _weighted(a, weights, axis, _ALLVALS, validate)
 
 
 def nanaverage(a, weights=None, axis=None, *, ignore_inf=False, validate=True):
@@ -161,7 +161,7 @@ def sum(  # noqa: A001 - numpy-like name
         a,
         axis,
         weights,
-        _ALL_VALUES,
+        _ALLVALS,
         return_sum_weights,
         return_unweighted_sum,
         validate,
@@ -197,11 +197,9 @@ def min(a, axis=None, *, validate=True):  # noqa: A001 - numpy-like name
     """Minimum; NaN propagates (numpy ``min`` semantics)."""
     if axis is not None:
         return _axis_scalar(
-            a, axis, _K_MIN, _ALL_VALUES, validate=validate, preserve_dtype=True
+            a, axis, _K_MIN, _ALLVALS, validate=validate, preserve_dtype=True
         )
-    return _core.min_1d(
-        prepare_1d(a, validate=validate, preserve_dtype=True), _ALL_VALUES
-    )
+    return _core.min_1d(prepare_1d(a, validate=validate, preserve_dtype=True), _ALLVALS)
 
 
 def nanmin(a, axis=None, *, ignore_inf=False, validate=True):
@@ -218,11 +216,9 @@ def max(a, axis=None, *, validate=True):  # noqa: A001 - numpy-like name
     """Maximum; NaN propagates."""
     if axis is not None:
         return _axis_scalar(
-            a, axis, _K_MAX, _ALL_VALUES, validate=validate, preserve_dtype=True
+            a, axis, _K_MAX, _ALLVALS, validate=validate, preserve_dtype=True
         )
-    return _core.max_1d(
-        prepare_1d(a, validate=validate, preserve_dtype=True), _ALL_VALUES
-    )
+    return _core.max_1d(prepare_1d(a, validate=validate, preserve_dtype=True), _ALLVALS)
 
 
 def nanmax(a, axis=None, *, ignore_inf=False, validate=True):
@@ -240,14 +236,14 @@ def minmax(a, axis=None, *, validate=True):
     if axis is not None:
         return (
             _axis_scalar(
-                a, axis, _K_MIN, _ALL_VALUES, validate=validate, preserve_dtype=True
+                a, axis, _K_MIN, _ALLVALS, validate=validate, preserve_dtype=True
             ),
             _axis_scalar(
-                a, axis, _K_MAX, _ALL_VALUES, validate=validate, preserve_dtype=True
+                a, axis, _K_MAX, _ALLVALS, validate=validate, preserve_dtype=True
             ),
         )
     return _core.minmax_1d(
-        prepare_1d(a, validate=validate, preserve_dtype=True), _ALL_VALUES
+        prepare_1d(a, validate=validate, preserve_dtype=True), _ALLVALS
     )
 
 
@@ -278,7 +274,7 @@ def _var(a, axis, ddof, return_mean, policy, validate):
 
 def var(a, axis=None, ddof=0, *, return_mean=False, validate=True):
     """Variance; NaN/inf propagate. If ``return_mean``, return ``(var, mean)``."""
-    return _var(a, axis, ddof, return_mean, _ALL_VALUES, validate)
+    return _var(a, axis, ddof, return_mean, _ALLVALS, validate)
 
 
 def nanvar(a, axis=None, ddof=0, *, return_mean=False, ignore_inf=False, validate=True):
@@ -289,12 +285,12 @@ def nanvar(a, axis=None, ddof=0, *, return_mean=False, ignore_inf=False, validat
 def std(a, axis=None, ddof=0, *, return_mean=False, validate=True):
     """Standard deviation; NaN/inf propagate."""
     if axis is not None:
-        s = _axis_scalar(a, axis, _K_STD, _ALL_VALUES, ddof=ddof, validate=validate)
+        s = _axis_scalar(a, axis, _K_STD, _ALLVALS, ddof=ddof, validate=validate)
         if return_mean:
-            m = _axis_scalar(a, axis, _K_MEAN, _ALL_VALUES, validate=validate)
+            m = _axis_scalar(a, axis, _K_MEAN, _ALLVALS, validate=validate)
             return s, m
         return s
-    v, m = _core.var_1d(prepare_1d(a, validate=validate), int(ddof), _ALL_VALUES)
+    v, m = _core.var_1d(prepare_1d(a, validate=validate), int(ddof), _ALLVALS)
     s = float(np.sqrt(v))
     return (s, m) if return_mean else s
 
@@ -320,10 +316,10 @@ def median(a, axis=None, *, validate=True):
     """Median; NaN propagates (numpy ``median`` semantics)."""
     if axis is not None:
         return _axis_scalar(
-            a, axis, _K_MEDIAN, _ALL_VALUES, validate=validate, preserve_dtype=True
+            a, axis, _K_MED, _ALLVALS, validate=validate, preserve_dtype=True
         )
     return _core.median_1d(
-        prepare_1d(a, validate=validate, preserve_dtype=True), _ALL_VALUES
+        prepare_1d(a, validate=validate, preserve_dtype=True), _ALLVALS
     )
 
 
@@ -332,7 +328,7 @@ def nanmedian(a, axis=None, *, ignore_inf=False, validate=True):
     pol = _nan_policy(ignore_inf)
     if axis is not None:
         return _axis_scalar(
-            a, axis, _K_MEDIAN, pol, validate=validate, preserve_dtype=True
+            a, axis, _K_MED, pol, validate=validate, preserve_dtype=True
         )
     return _core.median_1d(prepare_1d(a, validate=validate, preserve_dtype=True), pol)
 
@@ -342,7 +338,7 @@ def lmedian(a, axis=None, *, ignore_inf=False, validate=True):
     pol = _nan_policy(ignore_inf)
     if axis is not None:
         return _axis_scalar(
-            a, axis, _K_LMEDIAN, pol, validate=validate, preserve_dtype=True
+            a, axis, _K_LMED, pol, validate=validate, preserve_dtype=True
         )
     return _core.lmedian_1d(prepare_1d(a, validate=validate, preserve_dtype=True), pol)
 
@@ -353,9 +349,9 @@ def lmedian(a, axis=None, *, ignore_inf=False, validate=True):
 def percentile(a, q, axis=None, *, validate=True):
     """Linear-interpolation percentile(s) in ``[0, 100]``; NaN propagates."""
     if axis is not None:
-        return _axis_pct(a, q, axis, _ALL_VALUES, percent=True, validate=validate)
+        return _axis_pct(a, q, axis, _ALLVALS, percent=True, validate=validate)
     q_arr, scalar = prepare_q(q, percent=True)
-    out = _core.percentile_1d(prepare_1d(a, validate=validate), q_arr, _ALL_VALUES)
+    out = _core.percentile_1d(prepare_1d(a, validate=validate), q_arr, _ALLVALS)
     return out[0] if scalar else out
 
 
@@ -372,9 +368,9 @@ def nanpercentile(a, q, axis=None, *, ignore_inf=False, validate=True):
 def quantile(a, q, axis=None, *, validate=True):
     """Linear-interpolation quantile(s) in ``[0, 1]``; NaN propagates."""
     if axis is not None:
-        return _axis_pct(a, q, axis, _ALL_VALUES, percent=False, validate=validate)
+        return _axis_pct(a, q, axis, _ALLVALS, percent=False, validate=validate)
     q_arr, scalar = prepare_q(q, percent=False)
-    out = _core.percentile_1d(prepare_1d(a, validate=validate), q_arr, _ALL_VALUES)
+    out = _core.percentile_1d(prepare_1d(a, validate=validate), q_arr, _ALLVALS)
     return out[0] if scalar else out
 
 
@@ -395,7 +391,7 @@ def count_finite(a, axis=None, *, validate=True):
     """Number of finite (non-NaN, non-inf) values."""
     if axis is not None:
         # count_finite ignores policy; pass AllValues. Cast float counts to int.
-        out = _axis_scalar(a, axis, _K_COUNT_FINITE, _ALL_VALUES, validate=validate)
+        out = _axis_scalar(a, axis, _K_COUNT_FIN, _ALLVALS, validate=validate)
         return out.astype(np.intp)
     return _core.count_finite_1d(prepare_1d(a, validate=validate))
 

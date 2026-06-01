@@ -202,7 +202,7 @@ Larger `shape[0]` or output size (`prod(*shape[1:])`) makes `reducers` win over 
 
 Same shapes with about 1% NaNs.
 
-`np.nanpercentile` / `np.nanquantile` are omitted: locally they were extremely slow and dominated benchmark runtime.
+`np.nanpercentile` / `np.nanquantile` are omitted: locally they were extremely slow (often >100x times slower than `rd`) and dominated benchmark runtime.
 
 ### General cube `(100, 100, 100)`
 

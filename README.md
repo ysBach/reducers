@@ -25,7 +25,7 @@ For Rust crate use:
 
 ```toml
 [dependencies]
-reducers = "0.2"
+reducers = "<version>"
 ```
 
 ## After Installation
@@ -77,9 +77,20 @@ weighted_sum, unweighted_sum, sum_of_weights = rd.nansum(
 )
 ```
 
-Dual use: the kernel modules are pure Rust (no PyO3/NumPy) and usable as a crate;
-the `reducers._core` Python extension is built with the `extension-module`
-feature.
+Dual use: the kernel modules are pure Rust (no PyO3/NumPy) and usable as a crate.
+
+## Maximum-performance Python calls
+
+For fixed production hot loops, import the low-level Python API as `rdl`:
+
+```python
+import reducers.lowlevel as rdl
+```
+
+The `rdl` functions call the same Rust kernels but skip the high-level Python
+normalization layer. See the documentation for details on achieving maximum performance.
+
+
 
 ## Current limits
 

@@ -9,6 +9,7 @@ parallelization, and benchmarks are documented in the project docs (the
 "How It Gets Fast" page).
 """
 
+from . import lowlevel
 from ._array import (
     average,
     count_finite,
@@ -72,6 +73,7 @@ __all__ = [
     "get_parallel_grains",
     "lmedian",
     "load_parallel_grains_config",
+    "lowlevel",
     "max",
     "mean",
     "median",

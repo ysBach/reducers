@@ -5,7 +5,7 @@
 //! arrays use the NaN-aware kernels; integer and bool arrays use finite numeric
 //! kernels and return the same public result types as the validated Python path.
 
-use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2};
+use numpy::{PyArray1, PyReadonlyArray1, PyReadonlyArray2, PyReadwriteArray1};
 use pyo3::exceptions::{PyTypeError, PyValueError, PyZeroDivisionError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -65,6 +65,49 @@ macro_rules! dispatch_numeric_slice {
     }};
 }
 
+macro_rules! dispatch_numeric_slice_mut {
+    ($arr:expr, $s:ident => $float_body:expr, $n:ident => $number_body:expr) => {{
+        if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<f64>>() {
+            let $s = a.as_slice_mut()?;
+            Ok($float_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<f32>>() {
+            let $s = a.as_slice_mut()?;
+            Ok($float_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<bool>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<i8>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<u8>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<i16>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<u16>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<i32>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<u32>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<i64>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else if let Ok(mut a) = $arr.extract::<PyReadwriteArray1<u64>>() {
+            let $n = a.as_slice_mut()?;
+            Ok($number_body)
+        } else {
+            Err(PyTypeError::new_err(
+                "reducers: expected a writable contiguous 1-D array with a supported real dtype",
+            ))
+        }
+    }};
+}
+
 macro_rules! dispatch_numeric_matrix {
     ($arr:expr, $a:ident => $float_body:expr, $n:ident => $number_body:expr) => {{
         if let Ok($a) = $arr.extract::<PyReadonlyArray2<f64>>() {
@@ -101,42 +144,48 @@ macro_rules! dispatch_weighted_slice {
     ($arr:expr, $weights:expr, $s:ident, $w:ident => $float_body:expr, $n:ident => $number_body:expr) => {{
         if let Ok(weights) = $weights.extract::<PyReadonlyArray1<f64>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<f32>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<bool>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<i8>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<u8>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<i16>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<u16>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<i32>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<u32>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<i64>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else if let Ok(weights) = $weights.extract::<PyReadonlyArray1<u64>>() {
             let $w = weights.as_slice()?;
-            dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
+            dispatch_weighted_values!($arr, $w, $s => $float_body, $n => $number_body)
         } else {
             Err(PyTypeError::new_err(
                 "reducers: expected a contiguous weights array with a supported real dtype",
             ))
         }
+    }};
+}
+
+macro_rules! dispatch_weighted_values {
+    ($arr:expr, $w:ident, $s:ident => $float_body:expr, $n:ident => $number_body:expr) => {{
+        dispatch_numeric_slice!($arr, $s => $float_body, $n => $number_body)
     }};
 }
 
@@ -314,14 +363,23 @@ fn count_finite_1d(arr: &Bound<'_, PyAny>) -> PyResult<usize> {
 #[pyfunction]
 fn average_1d(arr: &Bound<'_, PyAny>, weights: &Bound<'_, PyAny>, policy: u8) -> PyResult<f64> {
     let p = ScanPolicy::from_code(policy);
+    average_policy_1d(arr, weights, p)
+}
+
+#[inline]
+fn average_policy_1d(
+    arr: &Bound<'_, PyAny>,
+    weights: &Bound<'_, PyAny>,
+    policy: ScanPolicy,
+) -> PyResult<f64> {
     let result = dispatch_weighted_slice!(
         arr,
         weights,
         s,
-        w => reducers_1d::weighted_average(s, w, p),
+        w => reducers_1d::weighted_average(s, w, policy),
         n => reducers_1d::number_weighted_average(n, w)
     )?;
-    weighted_value(result, p)
+    weighted_value(result, policy)
 }
 
 #[pyfunction]
@@ -331,11 +389,20 @@ fn weighted_sum_1d(
     policy: u8,
 ) -> PyResult<(f64, f64, f64)> {
     let p = ScanPolicy::from_code(policy);
+    weighted_sum_policy_1d(arr, weights, p)
+}
+
+#[inline]
+fn weighted_sum_policy_1d(
+    arr: &Bound<'_, PyAny>,
+    weights: &Bound<'_, PyAny>,
+    policy: ScanPolicy,
+) -> PyResult<(f64, f64, f64)> {
     let result = dispatch_weighted_slice!(
         arr,
         weights,
         s,
-        w => reducers_1d::weighted_sum(s, w, p),
+        w => reducers_1d::weighted_sum(s, w, policy),
         n => reducers_1d::number_weighted_sum(n, w)
     )?;
     Ok((
@@ -344,6 +411,134 @@ fn weighted_sum_1d(
         result.unweighted_sum,
     ))
 }
+
+#[inline]
+fn weighted_sum_only_policy_1d(
+    arr: &Bound<'_, PyAny>,
+    weights: &Bound<'_, PyAny>,
+    policy: ScanPolicy,
+) -> PyResult<f64> {
+    dispatch_weighted_slice!(
+        arr,
+        weights,
+        s,
+        w => reducers_1d::weighted_sum_only(s, w, policy),
+        n => reducers_1d::number_weighted_sum_only(n, w)
+    )
+}
+
+#[inline]
+fn weighted_sum_and_weights_policy_1d(
+    arr: &Bound<'_, PyAny>,
+    weights: &Bound<'_, PyAny>,
+    policy: ScanPolicy,
+) -> PyResult<(f64, f64)> {
+    dispatch_weighted_slice!(
+        arr,
+        weights,
+        s,
+        w => reducers_1d::weighted_sum_and_weights(s, w, policy),
+        n => reducers_1d::number_weighted_sum_and_weights(n, w)
+    )
+}
+
+#[inline]
+fn weighted_sum_and_unweighted_policy_1d(
+    arr: &Bound<'_, PyAny>,
+    weights: &Bound<'_, PyAny>,
+    policy: ScanPolicy,
+) -> PyResult<(f64, f64)> {
+    dispatch_weighted_slice!(
+        arr,
+        weights,
+        s,
+        w => reducers_1d::weighted_sum_and_unweighted(s, w, policy),
+        n => reducers_1d::number_weighted_sum_and_unweighted(n, w)
+    )
+}
+
+macro_rules! weighted_sum_policy_op {
+    ($name:ident, $policy:expr) => {
+        #[pyfunction]
+        fn $name(arr: &Bound<'_, PyAny>, weights: &Bound<'_, PyAny>) -> PyResult<(f64, f64, f64)> {
+            weighted_sum_policy_1d(arr, weights, $policy)
+        }
+    };
+}
+
+macro_rules! weighted_sum_only_policy_op {
+    ($name:ident, $policy:expr) => {
+        #[pyfunction]
+        fn $name(arr: &Bound<'_, PyAny>, weights: &Bound<'_, PyAny>) -> PyResult<f64> {
+            weighted_sum_only_policy_1d(arr, weights, $policy)
+        }
+    };
+}
+
+macro_rules! weighted_sum_and_weights_policy_op {
+    ($name:ident, $policy:expr) => {
+        #[pyfunction]
+        fn $name(arr: &Bound<'_, PyAny>, weights: &Bound<'_, PyAny>) -> PyResult<(f64, f64)> {
+            weighted_sum_and_weights_policy_1d(arr, weights, $policy)
+        }
+    };
+}
+
+macro_rules! weighted_sum_and_unweighted_policy_op {
+    ($name:ident, $policy:expr) => {
+        #[pyfunction]
+        fn $name(arr: &Bound<'_, PyAny>, weights: &Bound<'_, PyAny>) -> PyResult<(f64, f64)> {
+            weighted_sum_and_unweighted_policy_1d(arr, weights, $policy)
+        }
+    };
+}
+
+macro_rules! average_policy_op {
+    ($name:ident, $policy:expr) => {
+        #[pyfunction]
+        fn $name(arr: &Bound<'_, PyAny>, weights: &Bound<'_, PyAny>) -> PyResult<f64> {
+            average_policy_1d(arr, weights, $policy)
+        }
+    };
+}
+
+weighted_sum_policy_op!(weighted_sum_valid_1d, ScanPolicy::AllFinite);
+weighted_sum_policy_op!(weighted_sum_skip_nan_1d, ScanPolicy::SkipNan);
+weighted_sum_policy_op!(weighted_sum_skip_nonfinite_1d, ScanPolicy::SkipNonFinite);
+
+weighted_sum_only_policy_op!(weighted_sum_only_valid_1d, ScanPolicy::AllFinite);
+weighted_sum_only_policy_op!(weighted_sum_only_skip_nan_1d, ScanPolicy::SkipNan);
+weighted_sum_only_policy_op!(
+    weighted_sum_only_skip_nonfinite_1d,
+    ScanPolicy::SkipNonFinite
+);
+
+weighted_sum_and_weights_policy_op!(weighted_sum_and_weights_valid_1d, ScanPolicy::AllFinite);
+weighted_sum_and_weights_policy_op!(weighted_sum_and_weights_skip_nan_1d, ScanPolicy::SkipNan);
+weighted_sum_and_weights_policy_op!(
+    weighted_sum_and_weights_skip_nonfinite_1d,
+    ScanPolicy::SkipNonFinite
+);
+
+weighted_sum_and_unweighted_policy_op!(
+    weighted_sum_and_unweighted_valid_1d,
+    ScanPolicy::AllFinite
+);
+weighted_sum_and_unweighted_policy_op!(
+    weighted_sum_and_unweighted_skip_nan_1d,
+    ScanPolicy::SkipNan
+);
+weighted_sum_and_unweighted_policy_op!(
+    weighted_sum_and_unweighted_skip_nonfinite_1d,
+    ScanPolicy::SkipNonFinite
+);
+
+average_policy_op!(weighted_average_valid_1d, ScanPolicy::AllFinite);
+average_policy_op!(weighted_average_skip_nan_1d, ScanPolicy::SkipNan);
+average_policy_op!(
+    weighted_average_skip_nonfinite_1d,
+    ScanPolicy::SkipNonFinite
+);
 
 #[pyfunction]
 fn percentile_1d<'py>(
@@ -358,6 +553,61 @@ fn percentile_1d<'py>(
         arr,
         s => reducers_1d::percentiles(s, qs, p),
         n => reducers_1d::number_percentiles(n, qs)
+    )?;
+    Ok(PyArray1::from_vec(py, out))
+}
+
+#[pyfunction]
+fn median_valid_in_place_1d(arr: &Bound<'_, PyAny>) -> PyResult<f64> {
+    dispatch_numeric_slice_mut!(
+        arr,
+        s => reducers_1d::median_valid_in_place(s),
+        n => reducers_1d::number_median_valid_in_place(n)
+    )
+}
+
+#[pyfunction]
+fn lmedian_valid_in_place_1d<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    dispatch_numeric_slice_mut!(
+        arr,
+        s => reducers_1d::lmedian_valid_in_place(s).into_bound_py_any(py)?,
+        n => exact_or_nan!(py, reducers_1d::number_lmedian_value_valid_in_place(n))
+    )
+}
+
+#[pyfunction]
+fn percentile_valid_in_place_1d(arr: &Bound<'_, PyAny>, q: f64) -> PyResult<f64> {
+    dispatch_numeric_slice_mut!(
+        arr,
+        s => reducers_1d::percentile_valid_in_place(s, q),
+        n => reducers_1d::number_percentile_valid_in_place(n, q)
+    )
+}
+
+#[pyfunction]
+fn quantile_valid_in_place_1d(arr: &Bound<'_, PyAny>, q: f64) -> PyResult<f64> {
+    dispatch_numeric_slice_mut!(
+        arr,
+        s => reducers_1d::quantile_valid_in_place(s, q),
+        n => reducers_1d::number_quantile_valid_in_place(n, q)
+    )
+}
+
+#[pyfunction]
+fn percentiles_valid_in_place_1d<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    q: PyReadonlyArray1<'py, f64>,
+) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    let qs = q.as_slice()?;
+    let mut out = vec![f64::NAN; qs.len()];
+    dispatch_numeric_slice_mut!(
+        arr,
+        s => reducers_1d::percentiles_valid_in_place(s, qs, &mut out),
+        n => reducers_1d::number_percentiles_valid_in_place(n, qs, &mut out)
     )?;
     Ok(PyArray1::from_vec(py, out))
 }
@@ -609,7 +859,36 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(count_finite_1d, m)?)?;
     m.add_function(wrap_pyfunction!(average_1d, m)?)?;
     m.add_function(wrap_pyfunction!(weighted_sum_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_valid_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_skip_nan_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_skip_nonfinite_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_only_valid_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_only_skip_nan_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_only_skip_nonfinite_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_and_weights_valid_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_and_weights_skip_nan_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        weighted_sum_and_weights_skip_nonfinite_1d,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(weighted_sum_and_unweighted_valid_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        weighted_sum_and_unweighted_skip_nan_1d,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        weighted_sum_and_unweighted_skip_nonfinite_1d,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(weighted_average_valid_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_average_skip_nan_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(weighted_average_skip_nonfinite_1d, m)?)?;
     m.add_function(wrap_pyfunction!(percentile_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(median_valid_in_place_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(lmedian_valid_in_place_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(percentile_valid_in_place_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(quantile_valid_in_place_1d, m)?)?;
+    m.add_function(wrap_pyfunction!(percentiles_valid_in_place_1d, m)?)?;
     m.add_function(wrap_pyfunction!(reduce_axis, m)?)?;
     m.add_function(wrap_pyfunction!(average_axis, m)?)?;
     m.add_function(wrap_pyfunction!(weighted_sum_axis, m)?)?;

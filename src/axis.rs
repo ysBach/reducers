@@ -9,10 +9,11 @@ use rayon::prelude::*;
 use crate::finite::{Float, ScanPolicy};
 use crate::parallel::{axis_parallel_chunks, AxisParallelClass};
 use crate::reducers_1d::{
-    apply, apply_mut, apply_number, apply_number_mut, number_lmedian_value_in_place,
-    number_max_value, number_min_value, number_percentiles_in_place, number_weighted_average,
-    number_weighted_sum, percentiles_in_place, weighted_average, weighted_sum, Kind, Number,
-    Weight, WeightedMean, WeightedSum,
+    apply, apply_mut, apply_number, apply_number_mut, lmedian_valid_in_place,
+    median_valid_in_place, number_lmedian_value_in_place, number_max_value, number_min_value,
+    number_percentiles_in_place, number_weighted_average, number_weighted_sum,
+    percentiles_in_place, weighted_average, weighted_sum, Kind, Number, Weight, WeightedMean,
+    WeightedSum,
 };
 
 #[inline]
@@ -32,42 +33,6 @@ fn number_scan_class(kind: Kind) -> AxisParallelClass {
         Kind::Var | Kind::Std => AxisParallelClass::ScanVar,
         _ => AxisParallelClass::ScanPlain,
     }
-}
-
-#[inline]
-fn cmp_axis_float<T: Float>(a: &T, b: &T) -> std::cmp::Ordering {
-    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-}
-
-#[inline]
-fn axis_median_value<T: Float>(buf: &mut [T]) -> T {
-    if buf.is_empty() {
-        return T::nan();
-    }
-    let mid = buf.len() / 2;
-    if buf.len() % 2 == 1 {
-        let (_, value, _) = buf.select_nth_unstable_by(mid, cmp_axis_float);
-        *value
-    } else {
-        let (_, upper, _) = buf.select_nth_unstable_by(mid, cmp_axis_float);
-        let upper = *upper;
-        let lower = buf[..mid]
-            .iter()
-            .copied()
-            .max_by(cmp_axis_float)
-            .expect("even median lower partition is non-empty");
-        T::from_f64((lower.to_f64() + upper.to_f64()) / 2.0)
-    }
-}
-
-#[inline]
-fn axis_lmedian_value<T: Float>(buf: &mut [T]) -> T {
-    if buf.is_empty() {
-        return T::nan();
-    }
-    let idx = (buf.len() - 1) / 2;
-    let (_, value, _) = buf.select_nth_unstable_by(idx, cmp_axis_float);
-    *value
 }
 
 #[inline]
@@ -146,16 +111,6 @@ fn gather_axis0_skip_nonfinite<T: Float>(
         idx += outer;
     }
     count
-}
-
-#[inline]
-fn axis0_median_or_nan<T: Float>(count: Option<usize>, buf: &mut [T]) -> T {
-    count.map_or_else(T::nan, |count| axis_median_value(&mut buf[..count]))
-}
-
-#[inline]
-fn axis0_lmedian_or_nan<T: Float>(count: Option<usize>, buf: &mut [T]) -> T {
-    count.map_or_else(T::nan, |count| axis_lmedian_value(&mut buf[..count]))
 }
 
 #[inline]
@@ -653,54 +608,58 @@ pub fn reduce_axis0<T: Float>(
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count =
                             gather_axis0_all_values(data, n, outer, start + offset, &mut buf);
-                        *dst = axis0_median_or_nan(count, &mut buf);
+                        *dst = count.map_or_else(T::nan, |count| {
+                            T::from_f64(median_valid_in_place(&mut buf[..count]))
+                        });
                     }
                 }
                 (Kind::Median, ScanPolicy::AllFinite) => {
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count =
                             gather_axis0_all_finite(data, n, outer, start + offset, &mut buf);
-                        *dst = axis_median_value(&mut buf[..count]);
+                        *dst = T::from_f64(median_valid_in_place(&mut buf[..count]));
                     }
                 }
                 (Kind::Median, ScanPolicy::SkipNan) => {
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count = gather_axis0_skip_nan(data, n, outer, start + offset, &mut buf);
-                        *dst = axis_median_value(&mut buf[..count]);
+                        *dst = T::from_f64(median_valid_in_place(&mut buf[..count]));
                     }
                 }
                 (Kind::Median, ScanPolicy::SkipNonFinite) => {
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count =
                             gather_axis0_skip_nonfinite(data, n, outer, start + offset, &mut buf);
-                        *dst = axis_median_value(&mut buf[..count]);
+                        *dst = T::from_f64(median_valid_in_place(&mut buf[..count]));
                     }
                 }
                 (Kind::LMedian, ScanPolicy::AllValues) => {
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count =
                             gather_axis0_all_values(data, n, outer, start + offset, &mut buf);
-                        *dst = axis0_lmedian_or_nan(count, &mut buf);
+                        *dst = count.map_or_else(T::nan, |count| {
+                            T::from_f64(lmedian_valid_in_place(&mut buf[..count]))
+                        });
                     }
                 }
                 (Kind::LMedian, ScanPolicy::AllFinite) => {
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count =
                             gather_axis0_all_finite(data, n, outer, start + offset, &mut buf);
-                        *dst = axis_lmedian_value(&mut buf[..count]);
+                        *dst = T::from_f64(lmedian_valid_in_place(&mut buf[..count]));
                     }
                 }
                 (Kind::LMedian, ScanPolicy::SkipNan) => {
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count = gather_axis0_skip_nan(data, n, outer, start + offset, &mut buf);
-                        *dst = axis_lmedian_value(&mut buf[..count]);
+                        *dst = T::from_f64(lmedian_valid_in_place(&mut buf[..count]));
                     }
                 }
                 (Kind::LMedian, ScanPolicy::SkipNonFinite) => {
                     for (offset, dst) in out_chunk.iter_mut().enumerate() {
                         let count =
                             gather_axis0_skip_nonfinite(data, n, outer, start + offset, &mut buf);
-                        *dst = axis_lmedian_value(&mut buf[..count]);
+                        *dst = T::from_f64(lmedian_valid_in_place(&mut buf[..count]));
                     }
                 }
                 _ => unreachable!("axis-0 order path is only used for median/lmedian"),

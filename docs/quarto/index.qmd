@@ -50,6 +50,76 @@ rd.nanmean(values, axis=-1)      # reduce contiguous trailing-axis slices
 rd.nanpercentile(stack, [16, 50, 84], axis=0)
 ```
 
+## Maximum-performance Python API
+
+The high-level API above is the default interface. For fixed hot loops where
+the caller already controls layout, import the low-level Python API as `rdl`:
+
+```python
+import reducers.lowlevel as rdl
+```
+
+`rdl` calls the same Rust kernels while skipping the high-level Python
+normalization layer. With the default `copy=False`, arrays are passed directly
+to the extension; they must already have the dimensionality, C-contiguity, and
+supported dtype expected by the called kernel. Use `copy=True` only when you
+explicitly want `np.ascontiguousarray(...)` at that call site.
+
+```python
+buf = np.ascontiguousarray(a, dtype=np.float64)
+
+rdl.mean_valid(buf)                  # trusted values; no NaN/inf filtering
+rdl.mean_skip_nonfinite(buf)         # skip NaN and +/-inf
+rdl.var_mean_valid(buf, ddof=1)      # paired result from one Rust reducer
+```
+
+Weighted 1-D loops can call the fused weighted kernels without high-level
+return formatting. Choose the narrow primitive for the output terms needed:
+
+```python
+weighted_sum = rdl.weighted_sum_only_skip_nonfinite(buf, w)
+weighted_sum, sum_weights = rdl.weighted_sum_and_weights_skip_nonfinite(buf, w)
+weighted_sum, sum_weights, unweighted_sum = rdl.weighted_sum_skip_nonfinite(buf, w)
+average = rdl.weighted_average_skip_nonfinite(buf, w)
+```
+
+The skip policy applies to values in `buf`; weights attached to retained values
+are used as-is. The bare weighted kernels expect contiguous same-length 1-D
+buffers; make any required copies before the call.
+
+For stack-style axis reductions, normalize to the 2-D layout the Rust axis
+kernel expects:
+
+```python
+stack2 = np.ascontiguousarray(stack.reshape(stack.shape[0], -1))
+median_image = rdl.reduce_axis0_valid(stack2, "median").reshape(stack.shape[1:])
+```
+
+For reusable per-output scratch buffers, in-place order statistics avoid an
+extra copy and may reorder the buffer:
+
+```python
+scratch = np.ascontiguousarray(values, dtype=np.float64)
+median = rdl.median_valid_in_place(scratch)
+```
+
+Some reducers can return intermediate quantities that are already computed by
+the same Rust scan:
+
+```python
+std, mean = rd.nanstd(a, ddof=1, return_mean=True)
+
+weighted_sum, sum_of_weights = rd.nansum(
+    a, weights=w, return_sum_weights=True
+)
+weighted_sum, unweighted_sum = rd.nansum(
+    a, weights=w, return_unweighted_sum=True
+)
+weighted_sum, unweighted_sum, sum_of_weights = rd.nansum(
+    a, weights=w, return_unweighted_sum=True, return_sum_weights=True
+)
+```
+
 You may use:
 
 ```python
@@ -78,6 +148,10 @@ mean(a, axis=None, *, validate=True)
 nanmean(a, axis=None, *, ignore_inf=False, validate=True)
 average(a, weights=None, axis=None, *, validate=True)
 nanaverage(a, weights=None, axis=None, *, ignore_inf=False, validate=True)
+sum(a, axis=None, *, weights=None, return_sum_weights=False,
+    return_unweighted_sum=False, validate=True)
+nansum(a, axis=None, *, weights=None, return_sum_weights=False,
+       return_unweighted_sum=False, ignore_inf=False, validate=True)
 var(a, axis=None, ddof=0, *, return_mean=False, validate=True)
 std(a, axis=None, ddof=0, *, return_mean=False, validate=True)
 minmax(a, axis=None, *, validate=True)
@@ -91,6 +165,8 @@ percentile(a, q, axis=None, *, validate=True)   # q in [0, 100], linear interp
 - `validate=False` skips input prep for trusted hot loops where the caller already has a contiguous supported kernel dtype (`float32`, `float64`, bool, or a NumPy integer dtype). Integer and bool arrays are reduced directly without an up-front float copy; complex and object arrays are unsupported.
 - Integer and bool `min`, `nanmin`, `max`, `nanmax`, and `lmedian` preserve dtype (not converted to float). `mean`, `sum`, `var/std`, `median`, and percentiles still return floating results.
 - `minmax` is the fused plain endpoint reducer for `axis=None`; `nanminmax` is the fused NaN-skipping endpoint reducer for `axis=None`. Axis calls currently return two separate axis reductions.
+- For `[nan]var` and `[nan]std`, `return_mean=True` returns the already-computed mean alongside the variance or standard deviation.
+- For weighted `[nan]sum`, `return_sum_weights=True` and `return_unweighted_sum=True` expose quantities already available during the fused weighted scan; they require `weights=...`.
 - Not a literal drop-in: no `out`, `keepdims`, `where`, `dtype`, or percentile `method` (linear only).
 - Weighted averages support `weights=None`, weights with the same shape as `a`, and 1-D weights along supported axes. A zero sum of retained weights raises `ZeroDivisionError`.
 
@@ -103,7 +179,7 @@ NumPy unless the Python extension feature is enabled.
 
 ```toml
 [dependencies]
-reducers = "0.2"
+reducers = "<version>"
 ```
 
 ```rust

@@ -287,6 +287,98 @@ pub fn weighted_sum<T: Float, W: Weight>(
     }
 }
 
+fn weighted_sum_parts<T: Float, W: Weight, const WITH_WEIGHTS: bool, const WITH_UNWEIGHTED: bool>(
+    values: &[T],
+    weights: &[W],
+    policy: ScanPolicy,
+) -> (f64, f64, f64) {
+    let mut weighted_sums = [0.0_f64; 4];
+    let mut sum_weights = [0.0_f64; 4];
+    let mut unweighted_sums = [0.0_f64; 4];
+    let mut v_chunks = values.chunks_exact(4);
+    let mut w_chunks = weights.chunks_exact(4);
+    for (v, w) in (&mut v_chunks).zip(&mut w_chunks) {
+        for lane in 0..4 {
+            let x = v[lane];
+            let keep = match policy {
+                ScanPolicy::AllValues | ScanPolicy::AllFinite => true,
+                ScanPolicy::SkipNan => !x.is_nan(),
+                ScanPolicy::SkipNonFinite => x.is_finite(),
+            };
+            if keep {
+                let x = x.to_f64();
+                let w = w[lane].to_f64();
+                weighted_sums[lane] += x * w;
+                if WITH_WEIGHTS {
+                    sum_weights[lane] += w;
+                }
+                if WITH_UNWEIGHTED {
+                    unweighted_sums[lane] += x;
+                }
+            }
+        }
+    }
+    for (&x, &w) in v_chunks.remainder().iter().zip(w_chunks.remainder()) {
+        let keep = match policy {
+            ScanPolicy::AllValues | ScanPolicy::AllFinite => true,
+            ScanPolicy::SkipNan => !x.is_nan(),
+            ScanPolicy::SkipNonFinite => x.is_finite(),
+        };
+        if keep {
+            let x = x.to_f64();
+            let w = w.to_f64();
+            weighted_sums[0] += x * w;
+            if WITH_WEIGHTS {
+                sum_weights[0] += w;
+            }
+            if WITH_UNWEIGHTED {
+                unweighted_sums[0] += x;
+            }
+        }
+    }
+    (
+        weighted_sums.iter().sum(),
+        if WITH_WEIGHTS {
+            sum_weights.iter().sum()
+        } else {
+            0.0
+        },
+        if WITH_UNWEIGHTED {
+            unweighted_sums.iter().sum()
+        } else {
+            0.0
+        },
+    )
+}
+
+pub fn weighted_sum_only<T: Float, W: Weight>(
+    values: &[T],
+    weights: &[W],
+    policy: ScanPolicy,
+) -> f64 {
+    weighted_sum_parts::<T, W, false, false>(values, weights, policy).0
+}
+
+pub fn weighted_sum_and_weights<T: Float, W: Weight>(
+    values: &[T],
+    weights: &[W],
+    policy: ScanPolicy,
+) -> (f64, f64) {
+    let (weighted_sum, sum_weights, _) =
+        weighted_sum_parts::<T, W, true, false>(values, weights, policy);
+    (weighted_sum, sum_weights)
+}
+
+pub fn weighted_sum_and_unweighted<T: Float, W: Weight>(
+    values: &[T],
+    weights: &[W],
+    policy: ScanPolicy,
+) -> (f64, f64) {
+    let (weighted_sum, _, unweighted_sum) =
+        weighted_sum_parts::<T, W, false, true>(values, weights, policy);
+    (weighted_sum, unweighted_sum)
+}
+
 // --------------------------------------------------------------------------
 // variance / std
 // --------------------------------------------------------------------------
@@ -358,6 +450,187 @@ pub fn variance<T: Float>(values: &[T], ddof: usize, policy: ScanPolicy) -> f64 
 
 pub fn std<T: Float>(values: &[T], ddof: usize, policy: ScanPolicy) -> f64 {
     variance(values, ddof, policy).sqrt()
+}
+
+/// Sum over a caller-validated float slice.
+///
+/// This assumes the caller has already selected the intended values. It performs
+/// no NaN or infinity filtering and returns `0.0` for an empty slice.
+#[inline]
+pub fn sum_valid<T: Float>(values: &[T]) -> f64 {
+    sum(values, ScanPolicy::AllFinite)
+}
+
+/// Mean over a caller-validated float slice.
+///
+/// This assumes the caller has already selected the intended values. It performs
+/// no NaN or infinity filtering and returns NaN for an empty slice.
+#[inline]
+pub fn mean_valid<T: Float>(values: &[T]) -> f64 {
+    mean(values, ScanPolicy::AllFinite)
+}
+
+/// Minimum over a caller-validated float slice.
+///
+/// This assumes the caller has already selected the intended values. It performs
+/// no NaN or infinity filtering and returns NaN for an empty slice.
+#[inline]
+pub fn min_valid<T: Float>(values: &[T]) -> T {
+    min(values, ScanPolicy::AllFinite)
+}
+
+/// Maximum over a caller-validated float slice.
+///
+/// This assumes the caller has already selected the intended values. It performs
+/// no NaN or infinity filtering and returns NaN for an empty slice.
+#[inline]
+pub fn max_valid<T: Float>(values: &[T]) -> T {
+    max(values, ScanPolicy::AllFinite)
+}
+
+/// `(min, max)` over a caller-validated float slice in one pass.
+///
+/// This assumes the caller has already selected the intended values. It performs
+/// no NaN or infinity filtering and returns `(NaN, NaN)` for an empty slice.
+#[inline]
+pub fn minmax_valid<T: Float>(values: &[T]) -> (T, T) {
+    minmax(values, ScanPolicy::AllFinite)
+}
+
+/// Returns `(variance, mean)` over a caller-validated float slice.
+#[inline]
+pub fn var_mean_valid<T: Float>(values: &[T], ddof: usize) -> (f64, f64) {
+    variance_mean(values, ddof, ScanPolicy::AllFinite)
+}
+
+/// Variance over a caller-validated float slice.
+#[inline]
+pub fn var_valid<T: Float>(values: &[T], ddof: usize) -> f64 {
+    var_mean_valid(values, ddof).0
+}
+
+/// Standard deviation over a caller-validated float slice.
+#[inline]
+pub fn std_valid<T: Float>(values: &[T], ddof: usize) -> f64 {
+    var_valid(values, ddof).sqrt()
+}
+
+/// Returns `(standard_deviation, mean)` over a caller-validated float slice.
+#[inline]
+pub fn std_mean_valid<T: Float>(values: &[T], ddof: usize) -> (f64, f64) {
+    let (var, mean) = var_mean_valid(values, ddof);
+    (var.sqrt(), mean)
+}
+
+/// Sum while skipping NaN values and retaining infinities.
+#[inline]
+pub fn sum_skip_nan<T: Float>(values: &[T]) -> f64 {
+    sum(values, ScanPolicy::SkipNan)
+}
+
+/// Mean while skipping NaN values and retaining infinities.
+#[inline]
+pub fn mean_skip_nan<T: Float>(values: &[T]) -> f64 {
+    mean(values, ScanPolicy::SkipNan)
+}
+
+/// Minimum while skipping NaN values and retaining infinities.
+#[inline]
+pub fn min_skip_nan<T: Float>(values: &[T]) -> T {
+    min(values, ScanPolicy::SkipNan)
+}
+
+/// Maximum while skipping NaN values and retaining infinities.
+#[inline]
+pub fn max_skip_nan<T: Float>(values: &[T]) -> T {
+    max(values, ScanPolicy::SkipNan)
+}
+
+/// `(min, max)` while skipping NaN values and retaining infinities.
+#[inline]
+pub fn minmax_skip_nan<T: Float>(values: &[T]) -> (T, T) {
+    minmax(values, ScanPolicy::SkipNan)
+}
+
+/// Returns `(variance, mean)` while skipping NaN values and retaining infinities.
+#[inline]
+pub fn var_mean_skip_nan<T: Float>(values: &[T], ddof: usize) -> (f64, f64) {
+    variance_mean(values, ddof, ScanPolicy::SkipNan)
+}
+
+/// Variance while skipping NaN values and retaining infinities.
+#[inline]
+pub fn var_skip_nan<T: Float>(values: &[T], ddof: usize) -> f64 {
+    var_mean_skip_nan(values, ddof).0
+}
+
+/// Standard deviation while skipping NaN values and retaining infinities.
+#[inline]
+pub fn std_skip_nan<T: Float>(values: &[T], ddof: usize) -> f64 {
+    var_skip_nan(values, ddof).sqrt()
+}
+
+/// Returns `(standard_deviation, mean)` while skipping NaN values and retaining
+/// infinities.
+#[inline]
+pub fn std_mean_skip_nan<T: Float>(values: &[T], ddof: usize) -> (f64, f64) {
+    let (var, mean) = var_mean_skip_nan(values, ddof);
+    (var.sqrt(), mean)
+}
+
+/// Sum while skipping all non-finite values.
+#[inline]
+pub fn sum_skip_nonfinite<T: Float>(values: &[T]) -> f64 {
+    sum(values, ScanPolicy::SkipNonFinite)
+}
+
+/// Mean while skipping all non-finite values.
+#[inline]
+pub fn mean_skip_nonfinite<T: Float>(values: &[T]) -> f64 {
+    mean(values, ScanPolicy::SkipNonFinite)
+}
+
+/// Minimum while skipping all non-finite values.
+#[inline]
+pub fn min_skip_nonfinite<T: Float>(values: &[T]) -> T {
+    min(values, ScanPolicy::SkipNonFinite)
+}
+
+/// Maximum while skipping all non-finite values.
+#[inline]
+pub fn max_skip_nonfinite<T: Float>(values: &[T]) -> T {
+    max(values, ScanPolicy::SkipNonFinite)
+}
+
+/// `(min, max)` while skipping all non-finite values.
+#[inline]
+pub fn minmax_skip_nonfinite<T: Float>(values: &[T]) -> (T, T) {
+    minmax(values, ScanPolicy::SkipNonFinite)
+}
+
+/// Returns `(variance, mean)` while skipping all non-finite values.
+#[inline]
+pub fn var_mean_skip_nonfinite<T: Float>(values: &[T], ddof: usize) -> (f64, f64) {
+    variance_mean(values, ddof, ScanPolicy::SkipNonFinite)
+}
+
+/// Variance while skipping all non-finite values.
+#[inline]
+pub fn var_skip_nonfinite<T: Float>(values: &[T], ddof: usize) -> f64 {
+    var_mean_skip_nonfinite(values, ddof).0
+}
+
+/// Standard deviation while skipping all non-finite values.
+#[inline]
+pub fn std_skip_nonfinite<T: Float>(values: &[T], ddof: usize) -> f64 {
+    var_skip_nonfinite(values, ddof).sqrt()
+}
+
+/// Returns `(standard_deviation, mean)` while skipping all non-finite values.
+#[inline]
+pub fn std_mean_skip_nonfinite<T: Float>(values: &[T], ddof: usize) -> (f64, f64) {
+    let (var, mean) = var_mean_skip_nonfinite(values, ddof);
+    (var.sqrt(), mean)
 }
 
 // --------------------------------------------------------------------------
@@ -849,8 +1122,14 @@ fn retain_for_order<T: Float>(buf: &mut [T], policy: ScanPolicy) -> Option<usize
     }
 }
 
+/// Median operating in place on an already valid buffer.
+///
+/// This low-level primitive assumes the caller has already compacted the
+/// intended values into `buf` and that `buf` contains no NaN values. It does no
+/// validation or filtering, may reorder `buf`, and returns NaN for an empty
+/// buffer.
 #[inline]
-fn median_of<T: Float>(buf: &mut [T]) -> f64 {
+pub fn median_valid_in_place<T: Float>(buf: &mut [T]) -> f64 {
     if buf.is_empty() {
         return f64::NAN;
     }
@@ -871,11 +1150,27 @@ fn median_of<T: Float>(buf: &mut [T]) -> f64 {
     }
 }
 
+/// Lower median operating in place on an already valid buffer.
+///
+/// This low-level primitive assumes the caller has already compacted the
+/// intended values into `buf` and that `buf` contains no NaN values. It does no
+/// validation or filtering, may reorder `buf`, and returns NaN for an empty
+/// buffer.
+#[inline]
+pub fn lmedian_valid_in_place<T: Float>(buf: &mut [T]) -> f64 {
+    if buf.is_empty() {
+        return f64::NAN;
+    }
+    let idx = (buf.len() - 1) / 2;
+    let (_, value, _) = buf.select_nth_unstable_by(idx, cmp_float);
+    value.to_f64()
+}
+
 /// Median operating in place on `buf` (reordered). Used by axis adapters.
 pub fn median_in_place<T: Float>(buf: &mut [T], policy: ScanPolicy) -> f64 {
     match retain_for_order(buf, policy) {
         None => f64::NAN,
-        Some(count) => median_of(&mut buf[..count]),
+        Some(count) => median_valid_in_place(&mut buf[..count]),
     }
 }
 
@@ -888,12 +1183,7 @@ pub fn median<T: Float>(values: &[T], policy: ScanPolicy) -> f64 {
 pub fn lmedian_in_place<T: Float>(buf: &mut [T], policy: ScanPolicy) -> f64 {
     match retain_for_order(buf, policy) {
         None => f64::NAN,
-        Some(0) => f64::NAN,
-        Some(count) => {
-            let idx = (count - 1) / 2;
-            let (_, value, _) = buf[..count].select_nth_unstable_by(idx, cmp_float);
-            value.to_f64()
-        }
+        Some(count) => lmedian_valid_in_place(&mut buf[..count]),
     }
 }
 
@@ -915,8 +1205,44 @@ fn selection_rank_budget(count: usize) -> usize {
     usize::BITS as usize - count.leading_zeros() as usize - 1
 }
 
+/// numpy-`linear` interpolation percentile operating in place on an already
+/// valid buffer.
+///
+/// `q` is in `[0, 100]`. This low-level primitive assumes the caller has
+/// already compacted the intended values into `buf` and that `buf` contains no
+/// NaN values. It does no validation or filtering, may reorder `buf`, allocates
+/// no heap memory, and returns NaN for an empty buffer.
+pub fn percentile_valid_in_place<T: Float>(buf: &mut [T], q: f64) -> f64 {
+    if buf.is_empty() {
+        return f64::NAN;
+    }
+    let (lower, upper, frac) = percentile_rank(buf.len(), q);
+    let (_, lo_value, _) = buf.select_nth_unstable_by(lower, cmp_float);
+    let lo = lo_value.to_f64();
+    if lower == upper {
+        return lo;
+    }
+    let (_, hi_value, _) = buf[lower + 1..].select_nth_unstable_by(upper - lower - 1, cmp_float);
+    let hi = hi_value.to_f64();
+    lo + (hi - lo) * frac
+}
+
+/// numpy-`linear` interpolation quantile operating in place on an already
+/// valid buffer.
+///
+/// `q` is in `[0, 1]`. This is equivalent to
+/// ``percentile_valid_in_place(buf, q * 100.0)`` and has the same caller
+/// contract.
+#[inline]
+pub fn quantile_valid_in_place<T: Float>(buf: &mut [T], q: f64) -> f64 {
+    percentile_valid_in_place(buf, q * 100.0)
+}
+
 /// numpy-`linear` interpolation percentiles into `out`, operating in place on
-/// `buf` (reordered). `qs` in `[0, 100]`. Used by axis adapters.
+/// `buf` after applying `policy`.
+///
+/// `qs` are in `[0, 100]`. This helper may reorder `buf` and may allocate work
+/// vectors proportional to `qs.len()`.
 pub fn percentiles_in_place<T: Float>(
     buf: &mut [T],
     qs: &[f64],
@@ -930,6 +1256,26 @@ pub fn percentiles_in_place<T: Float>(
         Some(count) => count,
     };
     let buf = &mut buf[..count];
+    percentiles_valid_in_place(buf, qs, out);
+}
+
+/// numpy-`linear` interpolation percentiles into `out`, operating in place on
+/// an already valid buffer.
+///
+/// `qs` are in `[0, 100]`. This low-level primitive assumes the caller has
+/// already compacted the intended values into `buf` and that `buf` contains no
+/// NaN values. It does no validation or filtering and may reorder `buf`. The
+/// scalar [`percentile_valid_in_place`] primitive allocates no heap memory; this
+/// multi-rank helper may allocate work vectors proportional to `qs.len()`.
+pub fn percentiles_valid_in_place<T: Float>(buf: &mut [T], qs: &[f64], out: &mut [f64]) {
+    out.fill(f64::NAN);
+    if buf.is_empty() {
+        return;
+    }
+    if qs.len() == 1 && out.len() == 1 {
+        out[0] = percentile_valid_in_place(buf, qs[0]);
+        return;
+    }
     let ranks: Vec<(usize, usize, f64)> =
         qs.iter().map(|&q| percentile_rank(buf.len(), q)).collect();
     let mut needed: Vec<usize> = ranks.iter().flat_map(|&(l, u, _)| [l, u]).collect();
@@ -1072,6 +1418,81 @@ pub fn number_weighted_sum<T: Number, W: Weight>(values: &[T], weights: &[W]) ->
         unweighted_sum: unweighted_sums.iter().sum(),
         count: values.len(),
     }
+}
+
+fn number_weighted_sum_parts<
+    T: Number,
+    W: Weight,
+    const WITH_WEIGHTS: bool,
+    const WITH_UNWEIGHTED: bool,
+>(
+    values: &[T],
+    weights: &[W],
+) -> (f64, f64, f64) {
+    let mut weighted_sums = [0.0_f64; 4];
+    let mut sum_weights = [0.0_f64; 4];
+    let mut unweighted_sums = [0.0_f64; 4];
+    let mut v_chunks = values.chunks_exact(4);
+    let mut w_chunks = weights.chunks_exact(4);
+    for (v, w) in (&mut v_chunks).zip(&mut w_chunks) {
+        for lane in 0..4 {
+            let x = v[lane].to_f64();
+            let w = w[lane].to_f64();
+            weighted_sums[lane] += x * w;
+            if WITH_WEIGHTS {
+                sum_weights[lane] += w;
+            }
+            if WITH_UNWEIGHTED {
+                unweighted_sums[lane] += x;
+            }
+        }
+    }
+    for (&x, &w) in v_chunks.remainder().iter().zip(w_chunks.remainder()) {
+        let x = x.to_f64();
+        let w = w.to_f64();
+        weighted_sums[0] += x * w;
+        if WITH_WEIGHTS {
+            sum_weights[0] += w;
+        }
+        if WITH_UNWEIGHTED {
+            unweighted_sums[0] += x;
+        }
+    }
+    (
+        weighted_sums.iter().sum(),
+        if WITH_WEIGHTS {
+            sum_weights.iter().sum()
+        } else {
+            0.0
+        },
+        if WITH_UNWEIGHTED {
+            unweighted_sums.iter().sum()
+        } else {
+            0.0
+        },
+    )
+}
+
+pub fn number_weighted_sum_only<T: Number, W: Weight>(values: &[T], weights: &[W]) -> f64 {
+    number_weighted_sum_parts::<T, W, false, false>(values, weights).0
+}
+
+pub fn number_weighted_sum_and_weights<T: Number, W: Weight>(
+    values: &[T],
+    weights: &[W],
+) -> (f64, f64) {
+    let (weighted_sum, sum_weights, _) =
+        number_weighted_sum_parts::<T, W, true, false>(values, weights);
+    (weighted_sum, sum_weights)
+}
+
+pub fn number_weighted_sum_and_unweighted<T: Number, W: Weight>(
+    values: &[T],
+    weights: &[W],
+) -> (f64, f64) {
+    let (weighted_sum, _, unweighted_sum) =
+        number_weighted_sum_parts::<T, W, false, true>(values, weights);
+    (weighted_sum, unweighted_sum)
 }
 
 #[inline]
@@ -1228,8 +1649,18 @@ fn number_median_of<T: Number>(buf: &mut [T]) -> f64 {
     }
 }
 
-pub fn number_median_in_place<T: Number>(buf: &mut [T]) -> f64 {
+/// Median operating in place on an already valid non-floating buffer.
+///
+/// This low-level primitive assumes `buf` contains exactly the intended values.
+/// It does no validation, may reorder `buf`, and returns NaN for an empty
+/// buffer.
+#[inline]
+pub fn number_median_valid_in_place<T: Number>(buf: &mut [T]) -> f64 {
     number_median_of(buf)
+}
+
+pub fn number_median_in_place<T: Number>(buf: &mut [T]) -> f64 {
+    number_median_valid_in_place(buf)
 }
 
 pub fn number_median<T: Number>(values: &[T]) -> f64 {
@@ -1237,11 +1668,28 @@ pub fn number_median<T: Number>(values: &[T]) -> f64 {
     number_median_in_place(&mut buf)
 }
 
-pub fn number_lmedian_in_place<T: Number>(buf: &mut [T]) -> f64 {
-    number_lmedian_value_in_place(buf).map_or(f64::NAN, Number::to_f64)
+/// Lower median operating in place on an already valid non-floating buffer.
+///
+/// This low-level primitive assumes `buf` contains exactly the intended values.
+/// It does no validation, may reorder `buf`, and returns NaN for an empty
+/// buffer.
+#[inline]
+pub fn number_lmedian_valid_in_place<T: Number>(buf: &mut [T]) -> f64 {
+    number_lmedian_value_valid_in_place(buf).map_or(f64::NAN, Number::to_f64)
 }
 
-pub fn number_lmedian_value_in_place<T: Number>(buf: &mut [T]) -> Option<T> {
+pub fn number_lmedian_in_place<T: Number>(buf: &mut [T]) -> f64 {
+    number_lmedian_valid_in_place(buf)
+}
+
+/// Lower median selected value operating in place on an already valid
+/// non-floating buffer.
+///
+/// This low-level primitive assumes `buf` contains exactly the intended values.
+/// It does no validation, may reorder `buf`, and returns `None` for an empty
+/// buffer.
+#[inline]
+pub fn number_lmedian_value_valid_in_place<T: Number>(buf: &mut [T]) -> Option<T> {
     if buf.is_empty() {
         return None;
     }
@@ -1250,14 +1698,62 @@ pub fn number_lmedian_value_in_place<T: Number>(buf: &mut [T]) -> Option<T> {
     Some(*value)
 }
 
+pub fn number_lmedian_value_in_place<T: Number>(buf: &mut [T]) -> Option<T> {
+    number_lmedian_value_valid_in_place(buf)
+}
+
 pub fn number_lmedian<T: Number>(values: &[T]) -> f64 {
     let mut buf = values.to_vec();
     number_lmedian_in_place(&mut buf)
 }
 
-pub fn number_percentiles_in_place<T: Number>(buf: &mut [T], qs: &[f64], out: &mut [f64]) {
+/// numpy-`linear` interpolation percentile operating in place on an already
+/// valid non-floating buffer.
+///
+/// `q` is in `[0, 100]`. This low-level primitive assumes `buf` contains
+/// exactly the intended values. It does no validation, may reorder `buf`,
+/// allocates no heap memory, and returns NaN for an empty buffer.
+pub fn number_percentile_valid_in_place<T: Number>(buf: &mut [T], q: f64) -> f64 {
+    if buf.is_empty() {
+        return f64::NAN;
+    }
+    let (lower, upper, frac) = percentile_rank(buf.len(), q);
+    let (_, lo_value, _) = buf.select_nth_unstable(lower);
+    let lo = lo_value.to_f64();
+    if lower == upper {
+        return lo;
+    }
+    let (_, hi_value, _) = buf[lower + 1..].select_nth_unstable(upper - lower - 1);
+    let hi = hi_value.to_f64();
+    lo + (hi - lo) * frac
+}
+
+/// numpy-`linear` interpolation quantile operating in place on an already valid
+/// non-floating buffer.
+///
+/// `q` is in `[0, 1]`. This is equivalent to
+/// ``number_percentile_valid_in_place(buf, q * 100.0)`` and has the same caller
+/// contract.
+#[inline]
+pub fn number_quantile_valid_in_place<T: Number>(buf: &mut [T], q: f64) -> f64 {
+    number_percentile_valid_in_place(buf, q * 100.0)
+}
+
+/// numpy-`linear` interpolation percentiles into `out`, operating in place on
+/// an already valid non-floating buffer.
+///
+/// `qs` are in `[0, 100]`. This low-level primitive assumes `buf` contains
+/// exactly the intended values. It does no validation or filtering and may
+/// reorder `buf`. The scalar [`number_percentile_valid_in_place`] primitive
+/// allocates no heap memory; this multi-rank helper may allocate work vectors
+/// proportional to `qs.len()`.
+pub fn number_percentiles_valid_in_place<T: Number>(buf: &mut [T], qs: &[f64], out: &mut [f64]) {
     out.fill(f64::NAN);
     if buf.is_empty() {
+        return;
+    }
+    if qs.len() == 1 && out.len() == 1 {
+        out[0] = number_percentile_valid_in_place(buf, qs[0]);
         return;
     }
     let ranks: Vec<(usize, usize, f64)> =
@@ -1287,6 +1783,10 @@ pub fn number_percentiles_in_place<T: Number>(buf: &mut [T], qs: &[f64], out: &m
             *dst = lo + (hi - lo) * frac;
         }
     }
+}
+
+pub fn number_percentiles_in_place<T: Number>(buf: &mut [T], qs: &[f64], out: &mut [f64]) {
+    number_percentiles_valid_in_place(buf, qs, out);
 }
 
 pub fn number_percentiles<T: Number>(values: &[T], qs: &[f64]) -> Vec<f64> {
@@ -1407,6 +1907,66 @@ mod tests {
     }
 
     #[test]
+    fn valid_scan_primitives_use_all_values_without_filtering() {
+        let v = [1.0_f64, 2.0, 3.0, f64::INFINITY];
+        assert_eq!(sum_valid(&v), f64::INFINITY);
+        assert_eq!(mean_valid(&v), f64::INFINITY);
+        assert_eq!(min_valid(&v), 1.0);
+        assert_eq!(max_valid(&v), f64::INFINITY);
+        assert_eq!(minmax_valid(&v), (1.0, f64::INFINITY));
+
+        let finite = [1.0_f64, 2.0, 3.0, 4.0];
+        assert_eq!(var_mean_valid(&finite, 1), (5.0 / 3.0, 2.5));
+        assert_eq!(var_valid(&finite, 0), 1.25);
+        assert_eq!(std_valid(&finite, 0), 1.25_f64.sqrt());
+        assert_eq!(std_mean_valid(&finite, 0), (1.25_f64.sqrt(), 2.5));
+    }
+
+    #[test]
+    fn skip_nonfinite_scan_primitives_drop_nan_and_inf() {
+        let v = [1.0_f64, f64::NAN, 2.0, f64::INFINITY, 4.0];
+        assert_eq!(sum_skip_nonfinite(&v), 7.0);
+        assert_eq!(mean_skip_nonfinite(&v), 7.0 / 3.0);
+        assert_eq!(min_skip_nonfinite(&v), 1.0);
+        assert_eq!(max_skip_nonfinite(&v), 4.0);
+        assert_eq!(minmax_skip_nonfinite(&v), (1.0, 4.0));
+        assert_eq!(var_mean_skip_nonfinite(&v, 0), (14.0 / 9.0, 7.0 / 3.0));
+        assert_eq!(
+            std_mean_skip_nonfinite(&v, 0),
+            ((14.0_f64 / 9.0).sqrt(), 7.0 / 3.0)
+        );
+    }
+
+    #[test]
+    fn skip_nan_scan_primitives_keep_inf() {
+        let v = [1.0_f64, f64::NAN, 2.0, f64::INFINITY];
+        assert_eq!(sum_skip_nan(&v), f64::INFINITY);
+        assert_eq!(mean_skip_nan(&v), f64::INFINITY);
+        assert_eq!(min_skip_nan(&v), 1.0);
+        assert_eq!(max_skip_nan(&v), f64::INFINITY);
+        assert_eq!(minmax_skip_nan(&v), (1.0, f64::INFINITY));
+    }
+
+    #[test]
+    fn scan_primitives_document_empty_and_ddof_behavior() {
+        let empty: [f64; 0] = [];
+        assert_eq!(sum_valid(&empty), 0.0);
+        assert!(mean_valid(&empty).is_nan());
+        assert!(min_valid(&empty).is_nan());
+        assert!(max_valid(&empty).is_nan());
+        assert!(var_valid(&empty, 0).is_nan());
+        assert_eq!(sum_skip_nonfinite(&[f64::NAN, f64::INFINITY]), 0.0);
+        assert!(mean_skip_nonfinite(&[f64::NAN, f64::INFINITY]).is_nan());
+
+        let single = [2.0_f64];
+        let (var, mean) = var_mean_valid(&single, 1);
+        assert!(var.is_nan());
+        assert_eq!(mean, 2.0);
+        assert_eq!(std_mean_valid(&single, 1).1, 2.0);
+        assert!(std_mean_valid(&single, 1).0.is_nan());
+    }
+
+    #[test]
     fn min_max_propagate_and_skip() {
         let v = [3.0_f64, 1.0, f64::NAN, 2.0];
         assert!(min(&v, AllValues).is_nan());
@@ -1424,6 +1984,94 @@ mod tests {
         assert_eq!(median(&[4.0_f64, 1.0, 3.0, 2.0], AllValues), 2.5);
         assert!(median(&[1.0_f64, f64::NAN, 2.0], AllValues).is_nan());
         assert_eq!(median(&[1.0_f64, f64::NAN, 2.0, 3.0], SkipNan), 2.0);
+    }
+
+    #[test]
+    fn valid_order_statistics_operate_on_compacted_buffer() {
+        let mut median_buf = [9.0_f64, 1.0, 4.0, 2.0];
+        assert_eq!(median_valid_in_place(&mut median_buf), 3.0);
+
+        let mut lmedian_buf = [9.0_f64, 1.0, 4.0, 2.0];
+        assert_eq!(lmedian_valid_in_place(&mut lmedian_buf), 2.0);
+
+        let mut percentile_buf = [0.0_f64, 10.0, 20.0, 30.0, 40.0];
+        assert_eq!(percentile_valid_in_place(&mut percentile_buf, 25.0), 10.0);
+
+        let mut interpolated_buf = [0.0_f64, 10.0, 20.0, 30.0, 40.0];
+        assert_eq!(percentile_valid_in_place(&mut interpolated_buf, 12.5), 5.0);
+
+        let mut quantile_buf = [0.0_f64, 10.0, 20.0, 30.0, 40.0];
+        assert_eq!(quantile_valid_in_place(&mut quantile_buf, 0.125), 5.0);
+
+        let mut percentiles_buf = [0.0_f64, 10.0, 20.0, 30.0, 40.0];
+        let mut out = [f64::NAN; 3];
+        percentiles_valid_in_place(&mut percentiles_buf, &[0.0, 12.5, 100.0], &mut out);
+        assert_eq!(out, [0.0, 5.0, 40.0]);
+    }
+
+    #[test]
+    fn number_valid_order_statistics_operate_on_compacted_buffer() {
+        let mut median_buf = [9_i16, 1, 4, 2];
+        assert_eq!(number_median_valid_in_place(&mut median_buf), 3.0);
+
+        let mut lmedian_buf = [9_i16, 1, 4, 2];
+        assert_eq!(number_lmedian_valid_in_place(&mut lmedian_buf), 2.0);
+
+        let mut lmedian_value_buf = [9_i16, 1, 4, 2];
+        assert_eq!(
+            number_lmedian_value_valid_in_place(&mut lmedian_value_buf),
+            Some(2)
+        );
+
+        let mut percentile_buf = [0_i16, 10, 20, 30, 40];
+        assert_eq!(
+            number_percentile_valid_in_place(&mut percentile_buf, 12.5),
+            5.0
+        );
+
+        let mut quantile_buf = [0_i16, 10, 20, 30, 40];
+        assert_eq!(
+            number_quantile_valid_in_place(&mut quantile_buf, 0.125),
+            5.0
+        );
+
+        let mut percentiles_buf = [0_i16, 10, 20, 30, 40];
+        let mut out = [f64::NAN; 3];
+        number_percentiles_valid_in_place(&mut percentiles_buf, &[0.0, 12.5, 100.0], &mut out);
+        assert_eq!(out, [0.0, 5.0, 40.0]);
+    }
+
+    #[test]
+    fn number_scan_primitives_document_existing_semantics() {
+        let v = [1_u16, 2, 3, 4];
+        assert_eq!(number_sum(&v), 10.0);
+        assert_eq!(number_mean(&v), 2.5);
+        assert_eq!(number_min(&v), 1.0);
+        assert_eq!(number_max(&v), 4.0);
+        assert_eq!(number_minmax(&v), (1.0, 4.0));
+        assert_eq!(number_variance_mean(&v, 1), (5.0 / 3.0, 2.5));
+        assert_eq!(number_variance(&v, 0), 1.25);
+        assert_eq!(number_std(&v, 0), 1.25_f64.sqrt());
+    }
+
+    #[test]
+    fn valid_order_statistics_keep_infinity_values() {
+        let mut median_buf = [1.0_f64, f64::INFINITY, 3.0];
+        assert_eq!(median_valid_in_place(&mut median_buf), 3.0);
+
+        let mut percentile_buf = [1.0_f64, 3.0, f64::INFINITY];
+        assert_eq!(
+            percentile_valid_in_place(&mut percentile_buf, 100.0),
+            f64::INFINITY
+        );
+    }
+
+    #[test]
+    fn valid_order_statistics_return_nan_for_empty_buffers() {
+        let mut buf: [f64; 0] = [];
+        assert!(median_valid_in_place(&mut buf).is_nan());
+        assert!(lmedian_valid_in_place(&mut buf).is_nan());
+        assert!(percentile_valid_in_place(&mut buf, 50.0).is_nan());
     }
 
     #[test]

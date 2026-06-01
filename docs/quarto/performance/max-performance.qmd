@@ -6,6 +6,70 @@ Exact timings vary with shape, dtype, NaN density, reducing-axis length, memory
 layout, CPU, and thread settings. Treat printed benchmark numbers as local
 measurements, not universal constants.
 
+## Python Expert API
+
+For maximum performance in Python hot loops, import the trusted low-level API as
+`rdl`:
+
+```python
+import reducers.lowlevel as rdl
+```
+
+This is the Python analogue of calling the raw performance layer directly:
+`rdl` skips high-level normalization and sends arrays straight to the Rust
+extension when `copy=False` (the default). The caller is responsible for
+providing the dimensionality, C-contiguity, and supported dtype expected by the
+called kernel.
+
+Use the policy-explicit names:
+
+- `*_valid`: the slice or 2-D axis buffer is already the intended data; no
+  NaN/inf filtering is performed.
+- `*_skip_nan`: skip NaN and keep infinities.
+- `*_skip_nonfinite`: skip NaN and infinities.
+
+```python
+buf = np.ascontiguousarray(values, dtype=np.float64)
+
+mean = rdl.mean_valid(buf)
+std, mean_again = rdl.std_mean_valid(buf, ddof=1)
+finite_mean = rdl.mean_skip_nonfinite(buf)
+```
+
+Weighted 1-D kernels expose fixed-output fused terms directly. Use the narrow
+primitive for the terms needed:
+
+```python
+weighted_sum = rdl.weighted_sum_only_skip_nonfinite(buf, w)
+weighted_sum, sum_weights = rdl.weighted_sum_and_weights_skip_nonfinite(buf, w)
+weighted_sum, sum_weights, unweighted_sum = rdl.weighted_sum_skip_nonfinite(buf, w)
+average = rdl.weighted_average_skip_nonfinite(buf, w)
+```
+
+The skip policy applies to values in `buf`; weights attached to retained values
+are used as-is. The bare weighted kernels expect contiguous same-length 1-D
+buffers; make any required copies before the call.
+
+For axis kernels, pass the normalized 2-D layout directly. Axis-0 stack
+reductions use `(n, outer)`; last-axis reductions use `(outer, n)`.
+
+```python
+stack2 = np.ascontiguousarray(stack.reshape(stack.shape[0], -1))
+median_image = rdl.reduce_axis0_valid(stack2, "median").reshape(stack.shape[1:])
+
+rows2 = np.ascontiguousarray(rows.reshape(-1, rows.shape[-1]))
+row_std = rdl.reduce_axis_last_valid(rows2, "std", ddof=1).reshape(rows.shape[:-1])
+```
+
+For order statistics inside a caller-owned traversal, use the in-place
+functions on reusable scratch buffers. They may reorder the buffer.
+
+```python
+scratch = np.ascontiguousarray(pixel_stack, dtype=np.float32)
+median = rdl.median_valid_in_place(scratch)
+p16_p50_p84 = rdl.percentiles_valid_in_place(scratch, [16.0, 50.0, 84.0])
+```
+
 ## Kernel Algorithms
 
 The package is intentionally small. Most of the speed comes from using a narrow
