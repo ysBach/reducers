@@ -88,7 +88,17 @@ import reducers.lowlevel as rdl
 ```
 
 The `rdl` functions call the same Rust kernels but skip the high-level Python
-normalization layer. See the documentation for details on achieving maximum performance.
+normalization layer. Weighted hot loops can choose the narrow fused primitive
+for the output terms they actually need:
+
+```python
+weighted_sum = rdl.weighted_sum_only_skip_nonfinite(a, w)
+weighted_sum, sum_weights = rdl.weighted_sum_and_weights_skip_nonfinite(a, w)
+weighted_sum, sum_weights, unweighted_sum = rdl.weighted_sum_skip_nonfinite(a, w)
+average = rdl.weighted_average_skip_nonfinite(a, w)
+```
+
+See the documentation for details on achieving maximum performance.
 
 
 
