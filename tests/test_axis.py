@@ -55,6 +55,13 @@ def test_axis_nanvar(axis, dtype):
         atol=1e-5,
         equal_nan=True,
     )
+    v, m = rd.nanvar(a, axis=axis, ddof=1, return_mean=True)
+    np.testing.assert_allclose(
+        v, np.nanvar(a, axis=axis, ddof=1), rtol=1e-3, atol=1e-5, equal_nan=True
+    )
+    np.testing.assert_allclose(
+        m, np.nanmean(a, axis=axis), rtol=1e-4, atol=1e-5, equal_nan=True
+    )
     s, m = rd.nanstd(a, axis=axis, ddof=1, return_mean=True)
     np.testing.assert_allclose(
         s, np.nanstd(a, axis=axis, ddof=1), rtol=1e-3, atol=1e-5, equal_nan=True
@@ -62,6 +69,22 @@ def test_axis_nanvar(axis, dtype):
     np.testing.assert_allclose(
         m, np.nanmean(a, axis=axis), rtol=1e-4, atol=1e-5, equal_nan=True
     )
+
+
+@pytest.mark.parametrize("axis", [0, -1])
+@pytest.mark.parametrize("rd_fn,np_fn", [(rd.var, np.var), (rd.std, np.std)])
+def test_axis_return_mean_integer_validate_false(axis, rd_fn, np_fn):
+    a = np.arange(24, dtype=np.int16).reshape(6, 4)
+    result, mean = rd_fn(a, axis=axis, ddof=1, return_mean=True, validate=False)
+    np.testing.assert_allclose(result, np_fn(a, axis=axis, ddof=1))
+    np.testing.assert_allclose(mean, np.mean(a, axis=axis))
+
+
+def test_axis_return_mean_preserves_mean_when_ddof_is_too_large():
+    a = np.array([[1.0, np.nan], [3.0, np.nan]])
+    variance, mean = rd.nanvar(a, axis=0, ddof=2, return_mean=True)
+    np.testing.assert_allclose(variance, np.array([np.nan, np.nan]), equal_nan=True)
+    np.testing.assert_allclose(mean, np.array([2.0, np.nan]), equal_nan=True)
 
 
 def test_axis0_variance_is_stable_for_large_offsets():

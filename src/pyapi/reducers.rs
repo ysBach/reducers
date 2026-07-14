@@ -738,6 +738,48 @@ fn reduce_axis<'py>(
     )
 }
 
+/// Axis variance and mean over a normalized 2-D contiguous array. Both outputs
+/// come from the same two-pass variance computation.
+#[pyfunction]
+fn var_mean_axis<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis_last: bool,
+    ddof: usize,
+    policy: u8,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    let p = ScanPolicy::from_code(policy);
+    dispatch_numeric_matrix!(
+        arr,
+        a => {
+            let (d0, d1) = a.as_array().dim();
+            let s = a.as_slice()?;
+            let (variances, means) = if axis_last {
+                axis::variance_mean_axis_last(s, d0, d1, ddof, p)
+            } else {
+                axis::variance_mean_axis0(s, d0, d1, ddof, p)
+            };
+            (
+                PyArray1::from_vec(py, variances).into_any(),
+                PyArray1::from_vec(py, means).into_any(),
+            )
+        },
+        n => {
+            let (d0, d1) = n.as_array().dim();
+            let s = n.as_slice()?;
+            let (variances, means) = if axis_last {
+                axis::variance_mean_axis_last_number(s, d0, d1, ddof)
+            } else {
+                axis::variance_mean_axis0_number(s, d0, d1, ddof)
+            };
+            (
+                PyArray1::from_vec(py, variances).into_any(),
+                PyArray1::from_vec(py, means).into_any(),
+            )
+        }
+    )
+}
+
 /// Axis percentiles. Returns a flat `(nq * outer)` f64 array laid out as `nq`
 /// rows of `outer` (the Python layer reshapes to `(nq, *out_shape)`).
 #[pyfunction]
@@ -890,6 +932,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(quantile_valid_in_place_1d, m)?)?;
     m.add_function(wrap_pyfunction!(percentiles_valid_in_place_1d, m)?)?;
     m.add_function(wrap_pyfunction!(reduce_axis, m)?)?;
+    m.add_function(wrap_pyfunction!(var_mean_axis, m)?)?;
     m.add_function(wrap_pyfunction!(average_axis, m)?)?;
     m.add_function(wrap_pyfunction!(weighted_sum_axis, m)?)?;
     m.add_function(wrap_pyfunction!(percentile_axis, m)?)?;

@@ -11,9 +11,9 @@ use crate::parallel::{axis_parallel_chunks, AxisParallelClass};
 use crate::reducers_1d::{
     apply, apply_mut, apply_number, apply_number_mut, lmedian_valid_in_place,
     median_valid_in_place, number_lmedian_value_in_place, number_max_value, number_min_value,
-    number_percentiles_in_place, number_weighted_average, number_weighted_sum,
-    percentiles_in_place, weighted_average, weighted_sum, Kind, Number, Weight, WeightedMean,
-    WeightedSum,
+    number_percentiles_in_place, number_variance_mean, number_weighted_average,
+    number_weighted_sum, percentiles_in_place, weighted_average, weighted_sum, Kind, Number,
+    Weight, WeightedMean, WeightedSum,
 };
 
 #[inline]
@@ -219,6 +219,187 @@ pub fn reduce_axis_last<T: Float>(
                 .collect()
         }
     }
+}
+
+/// Return variance and mean for each contiguous row of `data` shaped
+/// `(outer, n)` (row-major), reusing the variance kernel's mean.
+pub fn variance_mean_axis_last<T: Float>(
+    data: &[T],
+    outer: usize,
+    n: usize,
+    ddof: usize,
+    policy: ScanPolicy,
+) -> (Vec<T>, Vec<T>) {
+    let row = |i: usize| &data[i * n..(i + 1) * n];
+    let compute = |i: usize| {
+        let (variance, mean) = crate::reducers_1d::variance_mean(row(i), ddof, policy);
+        (T::from_f64(variance), T::from_f64(mean))
+    };
+    let chunks = axis_parallel_chunks(AxisParallelClass::ScanVar, outer, n);
+    if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map(compute)
+            .unzip()
+    } else {
+        (0..outer).map(compute).unzip()
+    }
+}
+
+#[inline(always)]
+fn reduce_variance_axis0<T: Float, const RETURN_MEAN: bool>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    kind: Kind,
+    ddof: usize,
+    policy: ScanPolicy,
+) -> (Vec<T>, Option<Vec<T>>) {
+    debug_assert!(matches!(kind, Kind::Var | Kind::Std));
+    let mut out = vec![T::nan(); outer];
+    let mut means_out = RETURN_MEAN.then(|| vec![T::nan(); outer]);
+    if n == 0 {
+        return (out, means_out);
+    }
+
+    let reduce_chunk = |start: usize, out_chunk: &mut [T], mean_chunk: Option<&mut [T]>| {
+        let len = out_chunk.len();
+        let mut sums = vec![0.0_f64; len];
+        let mut counts = vec![0usize; len];
+        match policy {
+            ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                        *sum += x.to_f64();
+                        *count += 1;
+                    }
+                }
+            }
+            ScanPolicy::SkipNan => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                        if !x.is_nan() {
+                            *sum += x.to_f64();
+                            *count += 1;
+                        }
+                    }
+                }
+            }
+            ScanPolicy::SkipNonFinite => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                        if x.is_finite() {
+                            *sum += x.to_f64();
+                            *count += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut means = vec![f64::NAN; len];
+        let mut ss = vec![0.0_f64; len];
+        for ((mean, &sum), &count) in means.iter_mut().zip(&sums).zip(&counts) {
+            if count > 0 {
+                *mean = sum / count as f64;
+            }
+        }
+
+        match policy {
+            ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                        let d = x.to_f64() - mean;
+                        *acc += d * d;
+                    }
+                }
+            }
+            ScanPolicy::SkipNan => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                        if !x.is_nan() {
+                            let d = x.to_f64() - mean;
+                            *acc += d * d;
+                        }
+                    }
+                }
+            }
+            ScanPolicy::SkipNonFinite => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                        if x.is_finite() {
+                            let d = x.to_f64() - mean;
+                            *acc += d * d;
+                        }
+                    }
+                }
+            }
+        }
+
+        for ((dst, &acc), &count) in out_chunk.iter_mut().zip(&ss).zip(&counts) {
+            if count <= ddof {
+                *dst = T::nan();
+            } else {
+                let variance = acc / (count - ddof) as f64;
+                *dst = if matches!(kind, Kind::Std) {
+                    T::from_f64(variance.sqrt())
+                } else {
+                    T::from_f64(variance)
+                };
+            }
+        }
+        if let Some(dst) = mean_chunk {
+            for (dst, &mean) in dst.iter_mut().zip(&means) {
+                *dst = T::from_f64(mean);
+            }
+        }
+    };
+
+    let chunks = axis_parallel_chunks(scan_class(kind, policy), outer, n);
+    if chunks > 1 {
+        let chunk_len = outer.div_ceil(chunks);
+        if let Some(means) = means_out.as_mut() {
+            out.par_chunks_mut(chunk_len)
+                .zip(means.par_chunks_mut(chunk_len))
+                .enumerate()
+                .for_each(|(chunk_idx, (out_chunk, mean_chunk))| {
+                    reduce_chunk(chunk_idx * chunk_len, out_chunk, Some(mean_chunk));
+                });
+        } else {
+            out.par_chunks_mut(chunk_len)
+                .enumerate()
+                .for_each(|(chunk_idx, out_chunk)| {
+                    reduce_chunk(chunk_idx * chunk_len, out_chunk, None);
+                });
+        }
+    } else {
+        reduce_chunk(0, &mut out, means_out.as_deref_mut());
+    }
+    (out, means_out)
+}
+
+/// Return variance and mean for each strided reducing-axis slice of `data`
+/// shaped `(n, outer)`, reusing the variance kernel's mean.
+pub fn variance_mean_axis0<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    ddof: usize,
+    policy: ScanPolicy,
+) -> (Vec<T>, Vec<T>) {
+    let (variances, means) =
+        reduce_variance_axis0::<T, true>(data, n, outer, Kind::Var, ddof, policy);
+    (
+        variances,
+        means.expect("RETURN_MEAN=true always produces a mean output"),
+    )
 }
 
 /// Reduce each strided reducing-axis slice of `data` shaped `(n, outer)`
@@ -485,117 +666,7 @@ pub fn reduce_axis0<T: Float>(
     }
 
     if matches!(kind, Kind::Var | Kind::Std) {
-        let mut out = vec![T::nan(); outer];
-        if n == 0 {
-            return out;
-        }
-
-        let reduce_chunk = |start: usize, out_chunk: &mut [T]| {
-            let len = out_chunk.len();
-            let mut sums = vec![0.0_f64; len];
-            let mut counts = vec![0usize; len];
-            match policy {
-                ScanPolicy::AllValues | ScanPolicy::AllFinite => {
-                    for k in 0..n {
-                        let row = &data[k * outer + start..k * outer + start + len];
-                        for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
-                            *sum += x.to_f64();
-                            *count += 1;
-                        }
-                    }
-                }
-                ScanPolicy::SkipNan => {
-                    for k in 0..n {
-                        let row = &data[k * outer + start..k * outer + start + len];
-                        for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
-                            if !x.is_nan() {
-                                *sum += x.to_f64();
-                                *count += 1;
-                            }
-                        }
-                    }
-                }
-                ScanPolicy::SkipNonFinite => {
-                    for k in 0..n {
-                        let row = &data[k * outer + start..k * outer + start + len];
-                        for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
-                            if x.is_finite() {
-                                *sum += x.to_f64();
-                                *count += 1;
-                            }
-                        }
-                    }
-                }
-            }
-
-            let mut means = vec![f64::NAN; len];
-            let mut ss = vec![0.0_f64; len];
-            for ((mean, &sum), &count) in means.iter_mut().zip(&sums).zip(&counts) {
-                if count > 0 {
-                    *mean = sum / count as f64;
-                }
-            }
-
-            match policy {
-                ScanPolicy::AllValues | ScanPolicy::AllFinite => {
-                    for k in 0..n {
-                        let row = &data[k * outer + start..k * outer + start + len];
-                        for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
-                            let d = x.to_f64() - mean;
-                            *acc += d * d;
-                        }
-                    }
-                }
-                ScanPolicy::SkipNan => {
-                    for k in 0..n {
-                        let row = &data[k * outer + start..k * outer + start + len];
-                        for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
-                            if !x.is_nan() {
-                                let d = x.to_f64() - mean;
-                                *acc += d * d;
-                            }
-                        }
-                    }
-                }
-                ScanPolicy::SkipNonFinite => {
-                    for k in 0..n {
-                        let row = &data[k * outer + start..k * outer + start + len];
-                        for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
-                            if x.is_finite() {
-                                let d = x.to_f64() - mean;
-                                *acc += d * d;
-                            }
-                        }
-                    }
-                }
-            }
-
-            for ((dst, &acc), &count) in out_chunk.iter_mut().zip(&ss).zip(&counts) {
-                if count <= ddof {
-                    *dst = T::nan();
-                } else {
-                    let variance = acc / (count - ddof) as f64;
-                    *dst = if matches!(kind, Kind::Std) {
-                        T::from_f64(variance.sqrt())
-                    } else {
-                        T::from_f64(variance)
-                    };
-                }
-            }
-        };
-
-        let chunks = axis_parallel_chunks(scan_class(kind, policy), outer, n);
-        if chunks > 1 {
-            let chunk_len = outer.div_ceil(chunks);
-            out.par_chunks_mut(chunk_len)
-                .enumerate()
-                .for_each(|(chunk_idx, out_chunk)| {
-                    reduce_chunk(chunk_idx * chunk_len, out_chunk);
-                });
-        } else {
-            reduce_chunk(0, &mut out);
-        }
-        return out;
+        return reduce_variance_axis0::<T, false>(data, n, outer, kind, ddof, policy).0;
     }
 
     if matches!(kind, Kind::Median | Kind::LMedian) {
@@ -811,6 +882,56 @@ pub fn reduce_axis_last_number<T: Number>(
                 .map(|i| apply_number(kind, row(i), ddof))
                 .collect()
         }
+    }
+}
+
+/// Return variance and mean for each contiguous row of non-floating numeric
+/// `data` shaped `(outer, n)` (row-major).
+pub fn variance_mean_axis_last_number<T: Number>(
+    data: &[T],
+    outer: usize,
+    n: usize,
+    ddof: usize,
+) -> (Vec<f64>, Vec<f64>) {
+    let row = |i: usize| &data[i * n..(i + 1) * n];
+    let compute = |i: usize| number_variance_mean(row(i), ddof);
+    let chunks = axis_parallel_chunks(AxisParallelClass::ScanVar, outer, n);
+    if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map(compute)
+            .unzip()
+    } else {
+        (0..outer).map(compute).unzip()
+    }
+}
+
+/// Return variance and mean for each strided reducing-axis slice of
+/// non-floating numeric `data` shaped `(n, outer)`.
+pub fn variance_mean_axis0_number<T: Number>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    ddof: usize,
+) -> (Vec<f64>, Vec<f64>) {
+    let compute = |buf: &mut Vec<T>, j: usize| {
+        buf.clear();
+        for k in 0..n {
+            buf.push(data[k * outer + j]);
+        }
+        number_variance_mean(buf, ddof)
+    };
+    let chunks = axis_parallel_chunks(AxisParallelClass::ScanVar, outer, n);
+    if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map_init(|| Vec::<T>::with_capacity(n), compute)
+            .unzip()
+    } else {
+        let mut buf = Vec::<T>::with_capacity(n);
+        (0..outer).map(|j| compute(&mut buf, j)).unzip()
     }
 }
 

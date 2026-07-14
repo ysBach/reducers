@@ -53,14 +53,14 @@ return_unweighted_sum : bool, optional
 _DDOF_RETURN_MEAN = """ddof : int, optional
     Delta degrees of freedom. Results with ``nvalid <= ddof`` are ``NaN``.
 return_mean : bool, optional
-    If `True`, return ``(variance, mean)``. For ``axis=None`` this reuses the
-    mean already computed by the variance kernel."""
+    If `True`, return ``(variance, mean)``, reusing the mean already computed
+    by the variance kernel."""
 
 _DDOF_RETURN_STD_MEAN = """ddof : int, optional
     Delta degrees of freedom. Results with ``nvalid <= ddof`` are ``NaN``.
 return_mean : bool, optional
-    If `True`, return ``(standard_deviation, mean)``. For ``axis=None`` this
-    reuses the mean already computed by the variance kernel."""
+    If `True`, return ``(standard_deviation, mean)``, reusing the mean already
+    computed by the variance kernel."""
 
 _Q_PERCENTILE = """q : scalar or array_like
     Percentile or percentiles in ``[0, 100]``. A scalar `q` returns a scalar for

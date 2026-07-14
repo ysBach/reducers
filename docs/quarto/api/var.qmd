@@ -22,7 +22,7 @@ Return the variance with NaN/inf propagation.
 
 <code>[**return_mean**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
 
-:   If `True`, return ``(variance, mean)``. For ``axis=None`` this reuses the mean already computed by the variance kernel.
+:   If `True`, return ``(variance, mean)``, reusing the mean already computed by the variance kernel.
 
 <code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
 

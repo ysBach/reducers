@@ -30,7 +30,7 @@ Return the standard deviation while skipping NaN values.
 
 <code>[**return_mean**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
 
-:   If `True`, return ``(standard_deviation, mean)``. For ``axis=None`` this reuses the mean already computed by the variance kernel.
+:   If `True`, return ``(standard_deviation, mean)``, reusing the mean already computed by the variance kernel.
 
 <code>[**ignore_inf**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
 

@@ -60,6 +60,12 @@ def _axis_scalar(a, axis, kind, policy, *, ddof=0, validate=True, preserve_dtype
     return out.reshape(out_shape)
 
 
+def _axis_var_mean(a, axis, ddof, policy, *, validate):
+    arr2, axis_last, out_shape = prepare_axis(a, axis, validate=validate)
+    variance, mean = _core.var_mean_axis(arr2, axis_last, int(ddof), policy)
+    return variance.reshape(out_shape), mean.reshape(out_shape)
+
+
 def _axis_pct(a, q, axis, policy, *, percent, validate):
     arr2, axis_last, out_shape = prepare_axis(a, axis, validate=validate)
     q_arr, scalar = prepare_q(q, percent=percent)
@@ -263,11 +269,9 @@ def nanminmax(a, axis=None, *, ignore_inf=False, validate=True):
 
 def _var(a, axis, ddof, return_mean, policy, validate):
     if axis is not None:
-        v = _axis_scalar(a, axis, _K_VAR, policy, ddof=ddof, validate=validate)
         if return_mean:
-            m = _axis_scalar(a, axis, _K_MEAN, policy, validate=validate)
-            return v, m
-        return v
+            return _axis_var_mean(a, axis, ddof, policy, validate=validate)
+        return _axis_scalar(a, axis, _K_VAR, policy, ddof=ddof, validate=validate)
     v, m = _core.var_1d(prepare_1d(a, validate=validate), int(ddof), policy)
     return (v, m) if return_mean else v
 
@@ -285,11 +289,10 @@ def nanvar(a, axis=None, ddof=0, *, return_mean=False, ignore_inf=False, validat
 def std(a, axis=None, ddof=0, *, return_mean=False, validate=True):
     """Standard deviation; NaN/inf propagate."""
     if axis is not None:
-        s = _axis_scalar(a, axis, _K_STD, _ALLVALS, ddof=ddof, validate=validate)
         if return_mean:
-            m = _axis_scalar(a, axis, _K_MEAN, _ALLVALS, validate=validate)
-            return s, m
-        return s
+            v, m = _axis_var_mean(a, axis, ddof, _ALLVALS, validate=validate)
+            return np.sqrt(v), m
+        return _axis_scalar(a, axis, _K_STD, _ALLVALS, ddof=ddof, validate=validate)
     v, m = _core.var_1d(prepare_1d(a, validate=validate), int(ddof), _ALLVALS)
     s = float(np.sqrt(v))
     return (s, m) if return_mean else s
@@ -299,11 +302,10 @@ def nanstd(a, axis=None, ddof=0, *, return_mean=False, ignore_inf=False, validat
     """Standard deviation ignoring NaN; ``ignore_inf`` also drops inf."""
     pol = _nan_policy(ignore_inf)
     if axis is not None:
-        s = _axis_scalar(a, axis, _K_STD, pol, ddof=ddof, validate=validate)
         if return_mean:
-            m = _axis_scalar(a, axis, _K_MEAN, pol, validate=validate)
-            return s, m
-        return s
+            v, m = _axis_var_mean(a, axis, ddof, pol, validate=validate)
+            return np.sqrt(v), m
+        return _axis_scalar(a, axis, _K_STD, pol, ddof=ddof, validate=validate)
     v, m = _core.var_1d(prepare_1d(a, validate=validate), int(ddof), pol)
     s = float(np.sqrt(v))
     return (s, m) if return_mean else s
