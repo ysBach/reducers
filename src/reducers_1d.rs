@@ -1194,6 +1194,10 @@ pub fn lmedian<T: Float>(values: &[T], policy: ScanPolicy) -> f64 {
 
 #[inline]
 fn percentile_rank(count: usize, q: f64) -> (usize, usize, f64) {
+    debug_assert!(
+        (0.0..=100.0).contains(&q),
+        "percentile q must be in [0, 100]"
+    );
     let rank = (q / 100.0) * (count - 1) as f64;
     let lower = rank.floor() as usize;
     let upper = rank.ceil() as usize;
@@ -2094,5 +2098,16 @@ mod tests {
         let v: Vec<f64> = (0..=10).map(|x| x as f64).collect();
         let out = percentiles(&v, &[0.0, 25.0, 50.0, 100.0], AllValues);
         assert_eq!(out, vec![0.0, 2.5, 5.0, 10.0]);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn percentile_rank_rejects_invalid_q_in_debug_builds() {
+        assert_eq!(percentile_rank(5, 0.0), (0, 0, 0.0));
+        assert_eq!(percentile_rank(5, 100.0), (4, 4, 0.0));
+
+        for q in [-0.1, 100.1, f64::NAN] {
+            assert!(std::panic::catch_unwind(|| percentile_rank(5, q)).is_err());
+        }
     }
 }
