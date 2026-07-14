@@ -738,6 +738,56 @@ fn reduce_axis<'py>(
     )
 }
 
+/// Axis minimum and maximum over a normalized 2-D contiguous array. Both
+/// outputs come from one scan of each reducing-axis slice.
+#[pyfunction]
+fn minmax_axis<'py>(
+    py: Python<'py>,
+    arr: &Bound<'py, PyAny>,
+    axis_last: bool,
+    policy: u8,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    let p = ScanPolicy::from_code(policy);
+    dispatch_numeric_matrix!(
+        arr,
+        a => {
+            let (d0, d1) = a.as_array().dim();
+            let s = a.as_slice()?;
+            let (lows, highs) = if axis_last {
+                axis::minmax_axis_last(s, d0, d1, p)
+            } else {
+                axis::minmax_axis0(s, d0, d1, p)
+            };
+            (
+                PyArray1::from_vec(py, lows).into_any(),
+                PyArray1::from_vec(py, highs).into_any(),
+            )
+        },
+        n => {
+            let (d0, d1) = n.as_array().dim();
+            let s = n.as_slice()?;
+            let reducing_len = if axis_last { d1 } else { d0 };
+            if reducing_len > 0 {
+                let (lows, highs) = if axis_last {
+                    axis::minmax_axis_last_number_exact(s, d0, d1)
+                } else {
+                    axis::minmax_axis0_number_exact(s, d0, d1)
+                };
+                (
+                    PyArray1::from_vec(py, lows).into_any(),
+                    PyArray1::from_vec(py, highs).into_any(),
+                )
+            } else {
+                let outer = if axis_last { d0 } else { d1 };
+                (
+                    PyArray1::from_vec(py, vec![f64::NAN; outer]).into_any(),
+                    PyArray1::from_vec(py, vec![f64::NAN; outer]).into_any(),
+                )
+            }
+        }
+    )
+}
+
 /// Axis variance and mean over a normalized 2-D contiguous array. Both outputs
 /// come from the same two-pass variance computation.
 #[pyfunction]
@@ -932,6 +982,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(quantile_valid_in_place_1d, m)?)?;
     m.add_function(wrap_pyfunction!(percentiles_valid_in_place_1d, m)?)?;
     m.add_function(wrap_pyfunction!(reduce_axis, m)?)?;
+    m.add_function(wrap_pyfunction!(minmax_axis, m)?)?;
     m.add_function(wrap_pyfunction!(var_mean_axis, m)?)?;
     m.add_function(wrap_pyfunction!(average_axis, m)?)?;
     m.add_function(wrap_pyfunction!(weighted_sum_axis, m)?)?;

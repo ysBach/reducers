@@ -481,6 +481,30 @@ def test_axis_minmax_matches_nanmin_nanmax(axis):
     np.testing.assert_allclose(hi, np.nanmax(a, axis=axis), equal_nan=True)
 
 
+@pytest.mark.parametrize("axis", [0, -1])
+@pytest.mark.parametrize("dtype", [np.int16, np.uint32, np.bool_])
+@pytest.mark.parametrize("validate", [True, False])
+def test_axis_minmax_preserves_exact_dtype(axis, dtype, validate):
+    a = np.array([[3, 1, 4], [2, 5, 0]], dtype=dtype)
+    lo, hi = rd.minmax(a, axis=axis, validate=validate)
+    assert lo.dtype == hi.dtype == a.dtype
+    np.testing.assert_array_equal(lo, np.min(a, axis=axis))
+    np.testing.assert_array_equal(hi, np.max(a, axis=axis))
+
+
+def test_axis_nanminmax_ignore_inf_uses_finite_values_only():
+    a = np.array(
+        [
+            [np.nan, np.inf, 3.0, -np.inf],
+            [1.0, 2.0, np.inf, np.nan],
+            [4.0, -np.inf, 5.0, np.inf],
+        ]
+    )
+    lo, hi = rd.nanminmax(a, axis=0, ignore_inf=True)
+    np.testing.assert_allclose(lo, np.array([1.0, 2.0, 3.0, np.nan]), equal_nan=True)
+    np.testing.assert_allclose(hi, np.array([4.0, 2.0, 5.0, np.nan]), equal_nan=True)
+
+
 @pytest.mark.skipif(bn is None, reason="bottleneck is not installed")
 @pytest.mark.parametrize("axis", [0, -1])
 @pytest.mark.parametrize(

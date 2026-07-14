@@ -164,7 +164,7 @@ percentile(a, q, axis=None, *, validate=True)   # q in [0, 100], linear interp
 - `axis` may be `None` (default, whole-array), `0` or `-1` (identical to `a.ndim - 1`); other axes raise `NotImplementedError`. This keeps hidden transpose/copy costs out of the API and lets the Rust kernels specialize for the supported layouts.
 - `validate=False` skips input prep for trusted hot loops where the caller already has a contiguous supported kernel dtype (`float32`, `float64`, bool, or a NumPy integer dtype). Integer and bool arrays are reduced directly without an up-front float copy; complex and object arrays are unsupported.
 - Integer and bool `min`, `nanmin`, `max`, `nanmax`, and `lmedian` preserve dtype (not converted to float). `mean`, `sum`, `var/std`, `median`, and percentiles still return floating results.
-- `minmax` is the fused plain endpoint reducer for `axis=None`; `nanminmax` is the fused NaN-skipping endpoint reducer for `axis=None`. Axis calls currently return two separate axis reductions.
+- `minmax` and `nanminmax` compute both endpoints in one pass for whole-array and axis reductions.
 - For `[nan]var` and `[nan]std`, `return_mean=True` returns the already-computed mean alongside the variance or standard deviation.
 - For weighted `[nan]sum`, `return_sum_weights=True` and `return_unweighted_sum=True` expose quantities already available during the fused weighted scan; they require `weights=...`.
 - Not a literal drop-in: no `out`, `keepdims`, `where`, `dtype`, or percentile `method` (linear only).

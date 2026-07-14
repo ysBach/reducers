@@ -66,6 +66,14 @@ def _axis_var_mean(a, axis, ddof, policy, *, validate):
     return variance.reshape(out_shape), mean.reshape(out_shape)
 
 
+def _axis_minmax(a, axis, policy, *, validate):
+    arr2, axis_last, out_shape = prepare_axis(
+        a, axis, validate=validate, preserve_dtype=True
+    )
+    low, high = _core.minmax_axis(arr2, axis_last, policy)
+    return low.reshape(out_shape), high.reshape(out_shape)
+
+
 def _axis_pct(a, q, axis, policy, *, percent, validate):
     arr2, axis_last, out_shape = prepare_axis(a, axis, validate=validate)
     q_arr, scalar = prepare_q(q, percent=percent)
@@ -240,14 +248,7 @@ def nanmax(a, axis=None, *, ignore_inf=False, validate=True):
 def minmax(a, axis=None, *, validate=True):
     """Return ``(min, max)`` with NaN propagation."""
     if axis is not None:
-        return (
-            _axis_scalar(
-                a, axis, _K_MIN, _ALLVALS, validate=validate, preserve_dtype=True
-            ),
-            _axis_scalar(
-                a, axis, _K_MAX, _ALLVALS, validate=validate, preserve_dtype=True
-            ),
-        )
+        return _axis_minmax(a, axis, _ALLVALS, validate=validate)
     return _core.minmax_1d(
         prepare_1d(a, validate=validate, preserve_dtype=True), _ALLVALS
     )
@@ -257,10 +258,7 @@ def nanminmax(a, axis=None, *, ignore_inf=False, validate=True):
     """Return ``(nanmin, nanmax)`` in one pass; ``ignore_inf`` drops inf."""
     pol = _nan_policy(ignore_inf)
     if axis is not None:
-        return (
-            _axis_scalar(a, axis, _K_MIN, pol, validate=validate, preserve_dtype=True),
-            _axis_scalar(a, axis, _K_MAX, pol, validate=validate, preserve_dtype=True),
-        )
+        return _axis_minmax(a, axis, pol, validate=validate)
     return _core.minmax_1d(prepare_1d(a, validate=validate, preserve_dtype=True), pol)
 
 

@@ -10,8 +10,8 @@ use crate::finite::{Float, ScanPolicy};
 use crate::parallel::{axis_parallel_chunks, AxisParallelClass};
 use crate::reducers_1d::{
     apply, apply_mut, apply_number, apply_number_mut, lmedian_valid_in_place,
-    median_valid_in_place, number_lmedian_value_in_place, number_max_value, number_min_value,
-    number_percentiles_in_place, number_variance_mean, number_weighted_average,
+    median_valid_in_place, minmax, number_lmedian_value_in_place, number_max_value,
+    number_min_value, number_percentiles_in_place, number_variance_mean, number_weighted_average,
     number_weighted_sum, percentiles_in_place, weighted_average, weighted_sum, Kind, Number,
     Weight, WeightedMean, WeightedSum,
 };
@@ -400,6 +400,130 @@ pub fn variance_mean_axis0<T: Float>(
         variances,
         means.expect("RETURN_MEAN=true always produces a mean output"),
     )
+}
+
+/// Return minimum and maximum for each contiguous row of `data` shaped
+/// `(outer, n)` (row-major) in one scan per row.
+pub fn minmax_axis_last<T: Float>(
+    data: &[T],
+    outer: usize,
+    n: usize,
+    policy: ScanPolicy,
+) -> (Vec<T>, Vec<T>) {
+    let row = |i: usize| &data[i * n..(i + 1) * n];
+    let compute = |i: usize| minmax(row(i), policy);
+    let chunks = axis_parallel_chunks(scan_class(Kind::Min, policy), outer, n);
+    if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map(compute)
+            .unzip()
+    } else {
+        (0..outer).map(compute).unzip()
+    }
+}
+
+/// Return minimum and maximum for each strided reducing-axis slice of `data`
+/// shaped `(n, outer)` in one scan.
+pub fn minmax_axis0<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    policy: ScanPolicy,
+) -> (Vec<T>, Vec<T>) {
+    let mut lows = vec![T::nan(); outer];
+    let mut highs = vec![T::nan(); outer];
+    if n == 0 {
+        return (lows, highs);
+    }
+
+    let reduce_chunk = |start: usize, low_chunk: &mut [T], high_chunk: &mut [T]| {
+        let len = low_chunk.len();
+        let first = &data[start..start + len];
+        match policy {
+            ScanPolicy::AllValues => {
+                low_chunk.copy_from_slice(first);
+                high_chunk.copy_from_slice(first);
+                let mut has_nan = vec![0_u8; len];
+                for (flag, &x) in has_nan.iter_mut().zip(first) {
+                    *flag = u8::from(x.is_nan());
+                }
+                for k in 1..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for (((lo, hi), flag), &x) in low_chunk
+                        .iter_mut()
+                        .zip(high_chunk.iter_mut())
+                        .zip(has_nan.iter_mut())
+                        .zip(row)
+                    {
+                        *lo = (*lo).min_num(x);
+                        *hi = (*hi).max_num(x);
+                        *flag |= u8::from(x.is_nan());
+                    }
+                }
+                for ((lo, hi), &flag) in low_chunk
+                    .iter_mut()
+                    .zip(high_chunk.iter_mut())
+                    .zip(&has_nan)
+                {
+                    if flag != 0 {
+                        *lo = T::nan();
+                        *hi = T::nan();
+                    }
+                }
+            }
+            ScanPolicy::AllFinite => {
+                low_chunk.copy_from_slice(first);
+                high_chunk.copy_from_slice(first);
+                for k in 1..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((lo, hi), &x) in low_chunk.iter_mut().zip(high_chunk.iter_mut()).zip(row) {
+                        if x < *lo {
+                            *lo = x;
+                        }
+                        if x > *hi {
+                            *hi = x;
+                        }
+                    }
+                }
+            }
+            ScanPolicy::SkipNan => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((lo, hi), &x) in low_chunk.iter_mut().zip(high_chunk.iter_mut()).zip(row) {
+                        *lo = (*lo).min_num(x);
+                        *hi = (*hi).max_num(x);
+                    }
+                }
+            }
+            ScanPolicy::SkipNonFinite => {
+                for k in 0..n {
+                    let row = &data[k * outer + start..k * outer + start + len];
+                    for ((lo, hi), &x) in low_chunk.iter_mut().zip(high_chunk.iter_mut()).zip(row) {
+                        if x.is_finite() {
+                            *lo = (*lo).min_num(x);
+                            *hi = (*hi).max_num(x);
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    let chunks = axis_parallel_chunks(scan_class(Kind::Min, policy), outer, n);
+    if chunks > 1 {
+        let chunk_len = outer.div_ceil(chunks);
+        lows.par_chunks_mut(chunk_len)
+            .zip(highs.par_chunks_mut(chunk_len))
+            .enumerate()
+            .for_each(|(chunk_idx, (low_chunk, high_chunk))| {
+                reduce_chunk(chunk_idx * chunk_len, low_chunk, high_chunk);
+            });
+    } else {
+        reduce_chunk(0, &mut lows, &mut highs);
+    }
+    (lows, highs)
 }
 
 /// Reduce each strided reducing-axis slice of `data` shaped `(n, outer)`
@@ -1111,6 +1235,41 @@ pub fn reduce_axis_last_number_exact<T: Number>(
     }
 }
 
+/// Return exact minimum and maximum values for each non-empty contiguous row
+/// of non-floating numeric `data` shaped `(outer, n)`.
+pub fn minmax_axis_last_number_exact<T: Number>(
+    data: &[T],
+    outer: usize,
+    n: usize,
+) -> (Vec<T>, Vec<T>) {
+    debug_assert!(n > 0);
+    let row = |i: usize| &data[i * n..(i + 1) * n];
+    let compute = |i: usize| {
+        let values = row(i);
+        let mut lo = values[0];
+        let mut hi = values[0];
+        for &x in &values[1..] {
+            if x < lo {
+                lo = x;
+            }
+            if x > hi {
+                hi = x;
+            }
+        }
+        (lo, hi)
+    };
+    let chunks = axis_parallel_chunks(AxisParallelClass::ScanPlain, outer, n);
+    if chunks > 1 {
+        (0..outer)
+            .into_par_iter()
+            .with_min_len(outer.div_ceil(chunks))
+            .map(compute)
+            .unzip()
+    } else {
+        (0..outer).map(compute).unzip()
+    }
+}
+
 #[inline]
 fn map_axis_last_exact<T, F>(outer: usize, n: usize, f: F) -> Vec<T>
 where
@@ -1197,6 +1356,45 @@ pub fn reduce_axis0_number_exact<T: Number>(
         let mut buf = Vec::<T>::with_capacity(n);
         (0..outer).map(|j| gather(&mut buf, j)).collect()
     }
+}
+
+/// Return exact minimum and maximum values for each non-empty strided
+/// reducing-axis slice of non-floating numeric `data` shaped `(n, outer)`.
+pub fn minmax_axis0_number_exact<T: Number>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+) -> (Vec<T>, Vec<T>) {
+    debug_assert!(n > 0);
+    let mut lows = data[..outer].to_vec();
+    let mut highs = lows.clone();
+    let reduce_chunk = |start: usize, low_chunk: &mut [T], high_chunk: &mut [T]| {
+        let len = low_chunk.len();
+        for k in 1..n {
+            let row = &data[k * outer + start..k * outer + start + len];
+            for ((lo, hi), &x) in low_chunk.iter_mut().zip(high_chunk.iter_mut()).zip(row) {
+                if x < *lo {
+                    *lo = x;
+                }
+                if x > *hi {
+                    *hi = x;
+                }
+            }
+        }
+    };
+    let chunks = axis_parallel_chunks(AxisParallelClass::ScanPlain, outer, n);
+    if chunks > 1 {
+        let chunk_len = outer.div_ceil(chunks);
+        lows.par_chunks_mut(chunk_len)
+            .zip(highs.par_chunks_mut(chunk_len))
+            .enumerate()
+            .for_each(|(chunk_idx, (low_chunk, high_chunk))| {
+                reduce_chunk(chunk_idx * chunk_len, low_chunk, high_chunk);
+            });
+    } else {
+        reduce_chunk(0, &mut lows, &mut highs);
+    }
+    (lows, highs)
 }
 
 #[derive(Debug)]
