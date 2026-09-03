@@ -12,7 +12,7 @@ use crate::parallel::minmax_1d_parallel_chunks;
 
 #[inline]
 fn cmp_float<T: Float>(a: &T, b: &T) -> std::cmp::Ordering {
-    a.to_f64().total_cmp(&b.to_f64())
+    a.total_cmp(*b)
 }
 
 #[inline]
@@ -2043,6 +2043,24 @@ mod tests {
         let mut negative_extremes = [-max, -max];
         assert_eq!(median_valid_in_place(&mut negative_extremes), -max);
 
+        let next_below_max = f64::from_bits(max.to_bits() - 1);
+        let positive_expected = next_below_max + (max - next_below_max) / 2.0;
+        for mut values in [[next_below_max, max], [max, next_below_max]] {
+            assert_eq!(
+                median_valid_in_place(&mut values).to_bits(),
+                positive_expected.to_bits()
+            );
+        }
+
+        let next_above_min = -next_below_max;
+        let negative_expected = -max + (next_above_min - -max) / 2.0;
+        for mut values in [[-max, next_above_min], [next_above_min, -max]] {
+            assert_eq!(
+                median_valid_in_place(&mut values).to_bits(),
+                negative_expected.to_bits()
+            );
+        }
+
         let mut opposite_extremes = [-max, max];
         assert_eq!(median_valid_in_place(&mut opposite_extremes).to_bits(), 0);
 
@@ -2068,7 +2086,10 @@ mod tests {
         );
 
         let mut mixed_infinity = [f64::NEG_INFINITY, f64::INFINITY];
-        assert!(median_valid_in_place(&mut mixed_infinity).is_nan());
+        assert_eq!(
+            median_valid_in_place(&mut mixed_infinity).to_bits(),
+            f64::NAN.to_bits()
+        );
 
         let mut signed_zeros = [0.0_f64, -0.0];
         assert_eq!(median_valid_in_place(&mut signed_zeros).to_bits(), 0);
@@ -2100,6 +2121,38 @@ mod tests {
             median_valid_in_place(&mut odd_signed_zeros).to_bits(),
             (-0.0_f64).to_bits()
         );
+
+        let mut one_cast_midpoint = [1.0_f32, f32::from_bits(1.0_f32.to_bits() + 1)];
+        assert_eq!(
+            median_valid_in_place(&mut one_cast_midpoint),
+            (f64::from(1.0_f32) + f64::from(f32::from_bits(1.0_f32.to_bits() + 1))) / 2.0
+        );
+    }
+
+    #[test]
+    fn total_float_order_is_shared_by_order_statistics() {
+        let mut lower_median = [0.0_f64, -0.0];
+        assert_eq!(
+            lmedian_valid_in_place(&mut lower_median).to_bits(),
+            (-0.0_f64).to_bits()
+        );
+
+        let mut percentile = [0.0_f64, -0.0, f64::INFINITY];
+        assert_eq!(
+            percentile_valid_in_place(&mut percentile, 0.0).to_bits(),
+            (-0.0_f64).to_bits()
+        );
+
+        for mut permutation in [
+            [f64::INFINITY, -0.0, 0.0],
+            [0.0, f64::INFINITY, -0.0],
+            [-0.0, 0.0, f64::INFINITY],
+        ] {
+            assert_eq!(
+                quantile_valid_in_place(&mut permutation, 0.5).to_bits(),
+                0.0_f64.to_bits()
+            );
+        }
     }
 
     #[test]

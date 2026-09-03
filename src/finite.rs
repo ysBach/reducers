@@ -13,6 +13,9 @@ pub trait Float: Copy + PartialOrd + Send + Sync + 'static {
     fn zero() -> Self;
     fn from_f64(x: f64) -> Self;
     fn to_f64(self) -> f64;
+    fn total_cmp(self, other: Self) -> std::cmp::Ordering {
+        f64::total_cmp(&self.to_f64(), &other.to_f64())
+    }
 }
 
 impl Float for f32 {
@@ -48,6 +51,10 @@ impl Float for f32 {
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline]
+    fn total_cmp(self, other: Self) -> std::cmp::Ordering {
+        f32::total_cmp(&self, &other)
+    }
 }
 
 impl Float for f64 {
@@ -82,6 +89,10 @@ impl Float for f64 {
     #[inline]
     fn to_f64(self) -> f64 {
         self
+    }
+    #[inline]
+    fn total_cmp(self, other: Self) -> std::cmp::Ordering {
+        f64::total_cmp(&self, &other)
     }
 }
 
