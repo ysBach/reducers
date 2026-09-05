@@ -33,3 +33,7 @@ Return the median while skipping NaN values.
 ## Notes {.doc-section .doc-section-notes}
 
 NaN-aware reducers skip NaN values directly, without building a filtered copy of the input.
+
+Floating-point order statistics partition retained non-NaN values using IEEE 754 total ordering, placing ``-0.0`` before ``+0.0``.
+
+For an even number of retained floating-point values, the median averages the two middle values without intermediate overflow on large finite same-sign values. For this middle pair, equal infinities retain their sign, opposite infinities yield NaN, and mixed signed zeros yield ``+0.0``.

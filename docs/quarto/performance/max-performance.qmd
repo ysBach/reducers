@@ -162,6 +162,13 @@ work when only the middle value is needed. This is the standard order-statistic
 approach, not a package-specific invention. `lmedian` returns the lower
 selected middle value for even-length inputs.
 
+Floating-point order statistics partition scratch buffers using IEEE 754 total
+ordering (`total_cmp`), providing deterministic tie-breaking (such as ordering
+`-0.0` before `+0.0`). For an even number of retained values, `median` averages
+the two middle values using an overflow-safe midpoint calculation
+(`a + (b - a) / 2.0` for large finite same-sign values) to prevent intermediate
+overflow to infinity.
+
 `percentile` and `quantile` map each requested position to the two integer
 ranks that bracket it in sorted order (the floor and ceiling rank used for
 linear interpolation), then deduplicate those ranks across all requests. Call

@@ -33,3 +33,5 @@ Return linear-interpolation quantiles with NaN propagation.
 ## Notes {.doc-section .doc-section-notes}
 
 Plain reducers include every value, so NaN and inf propagate with IEEE / NumPy-like semantics. This is the fastest path for known-clean finite data.
+
+Floating-point order statistics partition retained non-NaN values using IEEE 754 total ordering, placing ``-0.0`` before ``+0.0``.

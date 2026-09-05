@@ -145,6 +145,18 @@ _COUNT_NOTE = (
     "``isfinite`` is true, regardless of the policy used by other reducers."
 )
 
+_TOTAL_ORDER_NOTE = (
+    "Floating-point order statistics partition retained non-NaN values using "
+    "IEEE 754 total ordering, placing ``-0.0`` before ``+0.0``."
+)
+
+_MEDIAN_MIDPOINT_NOTE = (
+    "For an even number of retained floating-point values, the median averages "
+    "the two middle values without intermediate overflow on large finite "
+    "same-sign values. For this middle pair, equal infinities retain their "
+    "sign, opposite infinities yield NaN, and mixed signed zeros yield ``+0.0``."
+)
+
 
 def _params(*extra: str) -> str:
     parts = [_A_PARAM, _AXIS_PARAM, *[item for item in extra if item], _VALIDATE]
@@ -263,13 +275,13 @@ _SPECS = {
         "Return the median with NaN propagation.",
         _params(),
         _SCALAR_OR_AXIS_RETURNS,
-        _PLAIN_NOTE,
+        f"{_PLAIN_NOTE}\n\n{_TOTAL_ORDER_NOTE}\n\n{_MEDIAN_MIDPOINT_NOTE}",
     ),
     "nanmedian": (
         "Return the median while skipping NaN values.",
         _params(_IGNORE_INF),
         _SCALAR_OR_AXIS_RETURNS,
-        _NAN_NOTE,
+        f"{_NAN_NOTE}\n\n{_TOTAL_ORDER_NOTE}\n\n{_MEDIAN_MIDPOINT_NOTE}",
     ),
     "lmedian": (
         "Return the lower value-selecting median while skipping NaN values.",
@@ -277,31 +289,32 @@ _SPECS = {
         _EXACT_SELECT_RETURNS,
         "For an even number of retained values, `lmedian` returns the lower of "
         "the two middle values instead of averaging them. For an odd number of "
-        f"retained values it matches `median`.\n\n{_NAN_NOTE}\n\n{_EXACT_INT_NOTE}",
+        f"retained values it matches `median`.\n\n{_NAN_NOTE}\n\n"
+        f"{_TOTAL_ORDER_NOTE}\n\n{_EXACT_INT_NOTE}",
     ),
     "percentile": (
         "Return linear-interpolation percentiles with NaN propagation.",
         _params_q(_Q_PERCENTILE),
         _PERCENTILE_RETURNS,
-        _PLAIN_NOTE,
+        f"{_PLAIN_NOTE}\n\n{_TOTAL_ORDER_NOTE}",
     ),
     "nanpercentile": (
         "Return linear-interpolation percentiles while skipping NaN values.",
         _params_q(_Q_PERCENTILE, _IGNORE_INF),
         _PERCENTILE_RETURNS,
-        _NAN_NOTE,
+        f"{_NAN_NOTE}\n\n{_TOTAL_ORDER_NOTE}",
     ),
     "quantile": (
         "Return linear-interpolation quantiles with NaN propagation.",
         _params_q(_Q_QUANTILE),
         _PERCENTILE_RETURNS,
-        _PLAIN_NOTE,
+        f"{_PLAIN_NOTE}\n\n{_TOTAL_ORDER_NOTE}",
     ),
     "nanquantile": (
         "Return linear-interpolation quantiles while skipping NaN values.",
         _params_q(_Q_QUANTILE, _IGNORE_INF),
         _PERCENTILE_RETURNS,
-        _NAN_NOTE,
+        f"{_NAN_NOTE}\n\n{_TOTAL_ORDER_NOTE}",
     ),
     "count_finite": (
         "Return the number of finite values.",

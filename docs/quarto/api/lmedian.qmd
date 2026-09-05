@@ -36,4 +36,6 @@ For an even number of retained values, `lmedian` returns the lower of the two mi
 
 NaN-aware reducers skip NaN values directly, without building a filtered copy of the input.
 
+Floating-point order statistics partition retained non-NaN values using IEEE 754 total ordering, placing ``-0.0`` before ``+0.0``.
+
 For integer and bool arrays there is no NaN to skip, so the ``nan*`` forms return the same result as their plain counterparts. ``min``, ``nanmin``, ``max``, ``nanmax``, and ``lmedian`` preserve the integer or bool dtype for non-empty reducing-axis slices.

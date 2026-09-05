@@ -8,9 +8,9 @@ title: "Performance"
 
 | workload | local result |
 |---|---|
-| Small (≲ 100) 1-D arrays | Faster than NumPy for most cases, but Bottleneck can still win for `nan*` cases. |
+| Small (≲ 100) 1-D arrays | Faster than NumPy for most cases, but Bottleneck can still win for `nan*` cases and small `median`. |
 | Plain `axis=0` scans (`mean` / `sum` / `min` / `max`) on shallow, small-output stacks | Mixed: often near NumPy, sometimes slower. See Parallel Threads for the crossover. |
-| NaN-aware `axis=0` `nanmean` / `nanaverage` / `nansum` / `nanvar` on stacks | Faster than NumPy; also faster than Bottleneck except the shallowest stacks. |
+| NaN-aware `axis=0` `nanmean` / `nanaverage` / `nansum` / `nanvar` on stacks | Faster than NumPy for most cases; also faster than Bottleneck except the shallowest stacks. |
 | Axis-0 stack medians and `[nan]var` / `std` on larger outputs | Usually much faster locally, because these paths avoid building one temporary slice per output pixel. |
 | all other cases (order statistics, larger arrays, `axis=-1`) | `reducers` is usually much faster than NumPy and Bottleneck locally. |
 
@@ -39,15 +39,15 @@ on the target machine when a small difference matters.
 
 ## Recorded Environment
 
-The benchmark tables in these docs were generated with:
+The benchmark tables in these docs were generated on 2026-09-06 with:
 
 ```txt
 python: 3.13.11 (CPython)
-reducers: 0.2.1
+reducers: 0.3.2
 numpy: 2.4.6
 bottleneck: 1.6.0
-os: macOS-26.5-arm64-arm-64bit-Mach-O
-kernel: Darwin 25.5.0 Darwin Kernel Version 25.5.0: Mon Apr 27 20:41:15 PDT 2026; root:xnu-12377.121.6~2/RELEASE_ARM64_T6041
+os: macOS-26.6-arm64-arm-64bit-Mach-O
+kernel: Darwin 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:27 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6041
 machine: arm64
 processor: arm
 reducers threads: 14
