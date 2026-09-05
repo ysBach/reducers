@@ -85,6 +85,7 @@ cover/
 # Environments
 .env
 .venv/
+.worktrees/
 env/
 venv/
 ENV/
