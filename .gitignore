@@ -11,6 +11,10 @@
 .pixi/
 .ipynb_checkpoints/
 .vscode/
+.claude/
+.cursor/
+.kiro/
+.handoff/
 .idea/
 
 # Quarto generated/cache output
