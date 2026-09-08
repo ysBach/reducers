@@ -35,6 +35,28 @@ fn number_scan_class(kind: Kind) -> AxisParallelClass {
     }
 }
 
+// Gather only columns whose accumulators overflowed. Keep allocation and
+// recovery out of the vectorizable ordinary scans and reuse one buffer.
+#[cold]
+fn recover_axis0_columns<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    start: usize,
+    out: &mut [T],
+    needs_recovery: impl Fn(usize) -> bool,
+    mut recover: impl FnMut(&[T], usize) -> T,
+) {
+    let mut values = Vec::new();
+    for (offset, dst) in out.iter_mut().enumerate() {
+        if needs_recovery(offset) {
+            values.clear();
+            values.extend((0..n).map(|k| data[k * outer + start + offset]));
+            *dst = recover(&values, offset);
+        }
+    }
+}
+
 #[inline]
 fn gather_axis0_all_values<T: Float>(
     data: &[T],
@@ -247,6 +269,98 @@ pub fn variance_mean_axis_last<T: Float>(
     }
 }
 
+// Compile accumulation separately from rare recovery so allocation and
+// fallback control flow cannot inhibit vectorization of the row scans.
+#[inline(never)]
+fn variance_axis0_moments<T: Float>(
+    data: &[T],
+    n: usize,
+    outer: usize,
+    start: usize,
+    len: usize,
+    policy: ScanPolicy,
+) -> (Vec<f64>, Vec<usize>, Vec<f64>, Vec<f64>) {
+    let mut sums = vec![0.0_f64; len];
+    let mut counts = vec![0usize; len];
+    match policy {
+        ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+            for k in 0..n {
+                let row = &data[k * outer + start..k * outer + start + len];
+                for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                    *sum += x.to_f64();
+                    *count += 1;
+                }
+            }
+        }
+        ScanPolicy::SkipNan => {
+            for k in 0..n {
+                let row = &data[k * outer + start..k * outer + start + len];
+                for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                    if !x.is_nan() {
+                        *sum += x.to_f64();
+                        *count += 1;
+                    }
+                }
+            }
+        }
+        ScanPolicy::SkipNonFinite => {
+            for k in 0..n {
+                let row = &data[k * outer + start..k * outer + start + len];
+                for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
+                    if x.is_finite() {
+                        *sum += x.to_f64();
+                        *count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut means = vec![f64::NAN; len];
+    let mut ss = vec![0.0_f64; len];
+    for ((mean, &sum), &count) in means.iter_mut().zip(&sums).zip(&counts) {
+        if count > 0 {
+            *mean = sum / count as f64;
+        }
+    }
+
+    match policy {
+        ScanPolicy::AllValues | ScanPolicy::AllFinite => {
+            for k in 0..n {
+                let row = &data[k * outer + start..k * outer + start + len];
+                for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                    let d = x.to_f64() - mean;
+                    *acc += d * d;
+                }
+            }
+        }
+        ScanPolicy::SkipNan => {
+            for k in 0..n {
+                let row = &data[k * outer + start..k * outer + start + len];
+                for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                    if !x.is_nan() {
+                        let d = x.to_f64() - mean;
+                        *acc += d * d;
+                    }
+                }
+            }
+        }
+        ScanPolicy::SkipNonFinite => {
+            for k in 0..n {
+                let row = &data[k * outer + start..k * outer + start + len];
+                for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
+                    if x.is_finite() {
+                        let d = x.to_f64() - mean;
+                        *acc += d * d;
+                    }
+                }
+            }
+        }
+    }
+
+    (sums, counts, means, ss)
+}
+
 #[inline(always)]
 fn reduce_variance_axis0<T: Float, const RETURN_MEAN: bool>(
     data: &[T],
@@ -265,83 +379,8 @@ fn reduce_variance_axis0<T: Float, const RETURN_MEAN: bool>(
 
     let reduce_chunk = |start: usize, out_chunk: &mut [T], mean_chunk: Option<&mut [T]>| {
         let len = out_chunk.len();
-        let mut sums = vec![0.0_f64; len];
-        let mut counts = vec![0usize; len];
-        match policy {
-            ScanPolicy::AllValues | ScanPolicy::AllFinite => {
-                for k in 0..n {
-                    let row = &data[k * outer + start..k * outer + start + len];
-                    for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
-                        *sum += x.to_f64();
-                        *count += 1;
-                    }
-                }
-            }
-            ScanPolicy::SkipNan => {
-                for k in 0..n {
-                    let row = &data[k * outer + start..k * outer + start + len];
-                    for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
-                        if !x.is_nan() {
-                            *sum += x.to_f64();
-                            *count += 1;
-                        }
-                    }
-                }
-            }
-            ScanPolicy::SkipNonFinite => {
-                for k in 0..n {
-                    let row = &data[k * outer + start..k * outer + start + len];
-                    for ((sum, count), &x) in sums.iter_mut().zip(&mut counts).zip(row) {
-                        if x.is_finite() {
-                            *sum += x.to_f64();
-                            *count += 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut means = vec![f64::NAN; len];
-        let mut ss = vec![0.0_f64; len];
-        for ((mean, &sum), &count) in means.iter_mut().zip(&sums).zip(&counts) {
-            if count > 0 {
-                *mean = sum / count as f64;
-            }
-        }
-
-        match policy {
-            ScanPolicy::AllValues | ScanPolicy::AllFinite => {
-                for k in 0..n {
-                    let row = &data[k * outer + start..k * outer + start + len];
-                    for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
-                        let d = x.to_f64() - mean;
-                        *acc += d * d;
-                    }
-                }
-            }
-            ScanPolicy::SkipNan => {
-                for k in 0..n {
-                    let row = &data[k * outer + start..k * outer + start + len];
-                    for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
-                        if !x.is_nan() {
-                            let d = x.to_f64() - mean;
-                            *acc += d * d;
-                        }
-                    }
-                }
-            }
-            ScanPolicy::SkipNonFinite => {
-                for k in 0..n {
-                    let row = &data[k * outer + start..k * outer + start + len];
-                    for ((acc, &mean), &x) in ss.iter_mut().zip(&means).zip(row) {
-                        if x.is_finite() {
-                            let d = x.to_f64() - mean;
-                            *acc += d * d;
-                        }
-                    }
-                }
-            }
-        }
+        let (sums, counts, mut means, ss) =
+            variance_axis0_moments(data, n, outer, start, len, policy);
 
         for ((dst, &acc), &count) in out_chunk.iter_mut().zip(&ss).zip(&counts) {
             if count <= ddof {
@@ -354,6 +393,35 @@ fn reduce_variance_axis0<T: Float, const RETURN_MEAN: bool>(
                     T::from_f64(variance)
                 };
             }
+        }
+        // Keep the ordinary finish loop independent of the allocating recovery.
+        // A nonfinite sum also makes its selected squared deviations nonfinite.
+        // A full boolean reduction can vectorize; short-circuit `any` cannot.
+        if !ss.iter().fold(true, |finite, x| finite & x.is_finite()) {
+            recover_axis0_columns(
+                data,
+                n,
+                outer,
+                start,
+                out_chunk,
+                |offset| {
+                    counts[offset] > 0 && (!sums[offset].is_finite() || !ss[offset].is_finite())
+                },
+                |values, offset| {
+                    let (variance, mean) = crate::reducers_1d::recover_variance_mean(
+                        values,
+                        counts[offset],
+                        ddof,
+                        policy,
+                    );
+                    means[offset] = mean;
+                    T::from_f64(if matches!(kind, Kind::Std) {
+                        variance.sqrt()
+                    } else {
+                        variance
+                    })
+                },
+            );
         }
         if let Some(dst) = mean_chunk {
             for (dst, &mean) in dst.iter_mut().zip(&means) {
@@ -736,6 +804,25 @@ pub fn reduce_axis0<T: Float>(
                     }
                     _ => unreachable!("axis-0 direct sum scan is only used for mean/sum"),
                 },
+            }
+            if matches!(kind, Kind::Mean)
+                && !sums.iter().fold(true, |finite, x| finite & x.is_finite())
+            {
+                recover_axis0_columns(
+                    data,
+                    n,
+                    outer,
+                    start,
+                    out_chunk,
+                    |offset| !sums[offset].is_finite(),
+                    |values, offset| {
+                        let count = match policy {
+                            ScanPolicy::AllValues | ScanPolicy::AllFinite => n,
+                            _ => counts[offset],
+                        };
+                        T::from_f64(crate::reducers_1d::scaled_mean(values, policy, count))
+                    },
+                );
             }
         };
 

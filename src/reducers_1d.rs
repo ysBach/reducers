@@ -163,12 +163,94 @@ fn sum_count<T: Float>(values: &[T], policy: ScanPolicy) -> (f64, usize) {
     }
 }
 
+// Recover an overflowing finite sum while retaining the ordinary scan for
+// normal inputs. Power-of-two scaling is exact except for underflow. Terms
+// that would underflow are accumulated unscaled and reintroduced after the
+// large terms cancel. The divisor is determined solely by the sample count.
+#[cold]
+pub(crate) fn scaled_mean<T: Float>(values: &[T], policy: ScanPolicy, count: usize) -> f64 {
+    debug_assert!(count > 0, "overflow recovery requires retained samples");
+    let keep = |x: T| match policy {
+        ScanPolicy::AllValues | ScanPolicy::AllFinite => true,
+        ScanPolicy::SkipNan => !x.is_nan(),
+        ScanPolicy::SkipNonFinite => x.is_finite(),
+    };
+    // 2^ceil(log2(count)) bounds the absolute sum by the largest input.
+    let exponent = usize::BITS - (count - 1).leading_zeros();
+    let divisor = 2.0_f64.powi(exponent as i32);
+    let mut partials = Vec::<f64>::new();
+    let mut tiny = 0.0;
+    let mut nonfinite = 0.0;
+    let mut bound = 0.0_f64;
+    for &value in values {
+        if !keep(value) {
+            continue;
+        }
+        let value = value.to_f64();
+        if !value.is_finite() {
+            nonfinite += value;
+            continue;
+        }
+        bound = bound.max(value.abs());
+        let mut x = value / divisor;
+        // Scaling back diagnoses lost low bits without a magnitude heuristic.
+        // The lost part is subnormal, so its sum cannot overflow.
+        tiny += value - x * divisor;
+        // Error-free two-sum expansion, from small partials to large ones.
+        let mut retained = 0;
+        for i in 0..partials.len() {
+            let mut y = partials[i];
+            if x.abs() < y.abs() {
+                std::mem::swap(&mut x, &mut y);
+            }
+            let hi = x + y;
+            let lo = y - (hi - x);
+            if lo != 0.0 {
+                partials[retained] = lo;
+                retained += 1;
+            }
+            x = hi;
+        }
+        partials.truncate(retained);
+        partials.push(x);
+    }
+    if !nonfinite.is_finite() {
+        return nonfinite;
+    }
+    let high = partials.pop().unwrap_or(0.0);
+    let low: f64 = partials.into_iter().rev().sum();
+    let scaled_sum = high + low;
+    // Recover tiny residuals before division whenever the unscaled sum fits.
+    let sum = scaled_sum * divisor;
+    let unscaled_high = high * divisor;
+    let unscaled_low = low * divisor;
+    // Opposite-signed partials can cancel into a representable sum even when
+    // restoring an individual partial would overflow.
+    if sum.is_finite() && unscaled_high.is_finite() && unscaled_low.is_finite() {
+        let high = unscaled_high;
+        let low = unscaled_low + tiny;
+        let quotient = high / count as f64;
+        let remainder = (-quotient).mul_add(count as f64, high) + low;
+        quotient + remainder / count as f64
+    } else {
+        // Divide the expansion before restoring the exponent. FMA retains the
+        // division remainder, including low bits lost when high + low rounds.
+        let quotient = high / count as f64;
+        let remainder = (-quotient).mul_add(count as f64, high) + low;
+        ((quotient + remainder / count as f64) * divisor).clamp(-bound, bound)
+    }
+}
+
+/// Arithmetic mean with scaled recovery after intermediate sum overflow.
+/// The ordinary finite scan is unchanged; recovery is not a correct-rounding guarantee.
 pub fn mean<T: Float>(values: &[T], policy: ScanPolicy) -> f64 {
     let (sum, count) = sum_count(values, policy);
     if count == 0 {
         f64::NAN
-    } else {
+    } else if sum.is_finite() {
         sum / count as f64
+    } else {
+        scaled_mean(values, policy, count)
     }
 }
 
@@ -452,13 +534,84 @@ fn ss_pred<T: Float, K: Fn(T) -> bool>(values: &[T], mean: f64, keep: K) -> f64 
     acc.iter().sum()
 }
 
+// Only reached when squared deviations overflow. Scaling before squaring
+// preserves a representable variance even when the unnormalized sum overflows.
+#[cold]
+fn scaled_variance<T: Float>(
+    values: &[T],
+    mean: f64,
+    denominator: usize,
+    policy: ScanPolicy,
+) -> f64 {
+    if !mean.is_finite() {
+        return f64::NAN;
+    }
+    let keep = |x: T| match policy {
+        ScanPolicy::AllValues | ScanPolicy::AllFinite => true,
+        ScanPolicy::SkipNan => !x.is_nan(),
+        ScanPolicy::SkipNonFinite => x.is_finite(),
+    };
+    let mut scale = 0.0_f64;
+    for &x in values {
+        if keep(x) {
+            let deviation = (x.to_f64() - mean).abs();
+            if !deviation.is_finite() {
+                // A difference exceeding f64::MAX cannot have a representable
+                // squared value even after division by any usize sample count.
+                return deviation;
+            }
+            scale = scale.max(deviation);
+        }
+    }
+    if scale == 0.0 {
+        return 0.0;
+    }
+    let mut ss = 0.0;
+    let mut correction = 0.0;
+    for &x in values {
+        if keep(x) {
+            let d = (x.to_f64() - mean) / scale;
+            let term = d * d - correction;
+            let next = ss + term;
+            correction = (next - ss) - term;
+            ss = next;
+        }
+    }
+    scale * (scale * (ss / denominator as f64))
+}
+
+// Axis accumulators have a different summation order. Once they overflow,
+// recovery must not retry an ordinary sum that can lose cancellation residuals.
+#[cold]
+pub(crate) fn recover_variance_mean<T: Float>(
+    values: &[T],
+    count: usize,
+    ddof: usize,
+    policy: ScanPolicy,
+) -> (f64, f64) {
+    let mean = scaled_mean(values, policy, count);
+    let variance = if count <= ddof {
+        f64::NAN
+    } else {
+        scaled_variance(values, mean, count - ddof, policy)
+    };
+    (variance, mean)
+}
+
 /// Returns `(variance, mean)` using a numerically stable two-pass algorithm.
+/// Intermediate overflow triggers scaled recovery and may refine an initially
+/// finite mean. Ordinary finite rounding is unchanged; out-of-range variance
+/// remains infinite, including when its square root would be representable.
 pub fn variance_mean<T: Float>(values: &[T], ddof: usize, policy: ScanPolicy) -> (f64, f64) {
     let (sum, count) = sum_count(values, policy);
     if count == 0 {
         return (f64::NAN, f64::NAN);
     }
-    let mean = sum / count as f64;
+    let mut mean = if sum.is_finite() {
+        sum / count as f64
+    } else {
+        scaled_mean(values, policy, count)
+    };
     if count <= ddof {
         return (f64::NAN, mean);
     }
@@ -467,7 +620,17 @@ pub fn variance_mean<T: Float>(values: &[T], ddof: usize, policy: ScanPolicy) ->
         ScanPolicy::SkipNan => ss_pred(values, mean, |x: T| !x.is_nan()),
         ScanPolicy::SkipNonFinite => ss_pred(values, mean, |x: T| x.is_finite()),
     };
-    (ss / (count - ddof) as f64, mean)
+    let variance = if ss.is_finite() {
+        ss / (count - ddof) as f64
+    } else {
+        // A rounded finite sum can also give an inaccurate center whose
+        // squared deviations overflow. Refine it before scaling deviations.
+        if sum.is_finite() {
+            mean = scaled_mean(values, policy, count);
+        }
+        scaled_variance(values, mean, count - ddof, policy)
+    };
+    (variance, mean)
 }
 
 pub fn variance<T: Float>(values: &[T], ddof: usize, policy: ScanPolicy) -> f64 {

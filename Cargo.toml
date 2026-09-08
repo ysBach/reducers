@@ -20,6 +20,8 @@ include = [
     "/LICENSE",
     "/python/reducers/licenses/imcombiners-BSD-3-Clause.txt",
     "/src/**/*.rs",
+    "/tests/extreme_moments.rs",
+    "/tests/test_extreme_moments.py",
     "/tests/sigma_clip.rs",
     "/tests/sigma_clip_edges.rs",
     "/tests/sigma_clip_defaults.rs",

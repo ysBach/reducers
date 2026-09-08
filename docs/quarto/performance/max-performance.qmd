@@ -137,6 +137,58 @@ fix does not throw away the main scan optimization.
 `std` is computed as `sqrt(var)` using the same variance kernel. `nanvar` and
 `nanstd` apply the same scan policies as the other `nan*` reducers.
 
+#### Overflow recovery
+
+Unweighted mean and variance keep their ordinary scans. When a sum or squared
+deviation accumulator becomes nonfinite, a separate recovery path rereads the
+selected values:
+
+- Mean scales by a power of two derived from the retained count, then keeps
+  summation residuals in a floating-point expansion. Scaling losses are retained
+  separately so cancellation can recover even a subnormal result.
+- Variance refines the mean, divides deviations by their largest magnitude,
+  and sums their squares with compensation. It divides by `count - ddof`
+  before restoring the scale, avoiding an overflowing unnormalized sum.
+- Axis-0 recovery gathers only affected columns into a reused buffer. Once the
+  axis accumulator overflows, it forces recovery even if another ordinary
+  summation order would return a finite, inaccurate result.
+
+Repeated `1e308` values therefore have mean `1e308` and variance `0`;
+`[-1e154, 1e154, -1e154, 1e154]` has population variance `1e308`.
+NaN/infinity selection policies, `ddof`, empty selections, and output dtypes
+remain unchanged.
+
+This is overflow recovery, not a correctly rounded arithmetic guarantee.
+Ordinary finite rounding, underflow without overflow, weighted moments, and
+the final sequential mean used by sigma clipping remain unchanged. A variance
+outside float64's range still gives infinite `std`, because `std = sqrt(var)`.
+Axis results can also overflow when cast back to float32.
+
+Measured against commit `da8ae8c` on 2026-09-08 (macOS arm64, Rust 1.96,
+release builds, Python 3.13.11, NumPy 2.5.2):
+
+| Ordinary path | Cases | Median time change | Range |
+|---|---:|---:|---:|
+| Rust, one thread | 22 | +0.4% | -0.2% to +3.3% |
+| Python, one thread | 48 | +0.5% | -6.2% to +5.8% |
+| Python, four threads, large axes | 16 | +1.0% | -1.0% to +2.5% |
+
+The Python comparison alternated both extracted wheels in one process over
+11 samples per case, with identical inputs and unchanged ordinary results.
+It covered float32/float64 `mean`, `var`, `nanmean`, and `nanvar`: 1-D lengths
+32, 4,096, and 1,048,576; axis-0 shapes `(8, 1024)` and `(64, 4096)`;
+and last-axis shape `(4096, 64)`. Four-thread cases used `(64, 65536)` and
+`(65536, 64)`. Rust timings used nine alternating process pairs across three
+scan policies. No measured change is a universal speed guarantee; the largest
+relative Python slowdown (+5.8%) added 5.2 microseconds to a 90.9-microsecond call.
+
+Warmed Rust allocation counts stayed unchanged: zero for 1-D moments, three
+for axis-0 mean, and five for axis-0 variance with one thread. Recovering the
+mean of eight `1e308` values used one allocation and about 40 ns, versus about
+1 ns for the old incorrect infinite result. The recovery and ordinary axis
+scans are compiled separately, and overflow detection uses a vectorizable
+boolean reduction to limit overhead.
+
 ### Min, Max, And Minmax
 
 Plain `min` and `max` must propagate NaN like NumPy. The numeric comparison loop

@@ -79,6 +79,10 @@ weighted_sum, unweighted_sum, sum_of_weights = rd.nansum(
 
 Dual use: the kernel modules are pure Rust (no PyO3/NumPy) and usable as a crate.
 
+Unweighted mean and variance recover representable results after intermediate
+overflow; see [numerical behavior](docs/quarto/performance/max-performance.qmd#overflow-recovery)
+for limits and performance.
+
 The Rust `sigma_clip` module provides cumulative sigma clipping over slices,
 with reusable caller-owned workspace, independent rejection/dispersion centers,
 rollback policies, and optional clipped mean or median. Defaults are `nkeep=0`

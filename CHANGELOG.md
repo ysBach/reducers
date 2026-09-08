@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fix overflow in mean: repeated `1e308` values now give mean `1e308` and
+  variance `0`; population variance of `[-1e154, 1e154, -1e154, 1e154]` is
+  `1e308`. Previously these results were infinite. Applies to 1-D and axis
+  reductions.
+
 ## 0.4.0 - 2026-09-08
 
 - Add reusable Rust and Python sigma-clipping APIs from
