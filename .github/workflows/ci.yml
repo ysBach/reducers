@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  UV_NO_SOURCES: "true"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: Formatting and release checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - name: Install locked development tools
+        run: uv sync --locked --extra dev --no-install-project
+      - run: uv run --no-sync ruff format --check python tests scripts
+      - run: uv run --no-sync ruff check python tests scripts
+      - run: uv run --no-sync pytest -q tests/test_release.py
+      - run: uv run --no-sync python scripts/check_release.py --require-clean
+
+  rust:
+    name: Rust (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: ["1.84.0", stable]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: rustfmt, clippy
+      - name: Check Rust formatting
+        if: matrix.toolchain == 'stable'
+        run: cargo fmt --all -- --check
+      - run: cargo build --locked --no-default-features
+      - run: cargo test --locked --no-default-features
+      - name: Verify Python-independent dependency graph
+        shell: bash
+        run: |
+          cargo tree --locked --no-default-features --target all --prefix none > "$RUNNER_TEMP/rust-dependencies.txt"
+          cat "$RUNNER_TEMP/rust-dependencies.txt"
+          if grep -E '^(numpy|pyo3(-[^ ]+)?) v' "$RUNNER_TEMP/rust-dependencies.txt"; then
+            echo "Rust-only build unexpectedly depends on NumPy or PyO3" >&2
+            exit 1
+          fi
+      - run: cargo check --locked --no-default-features --features extension-module
+      - name: Lint Rust and Python bindings
+        if: matrix.toolchain == 'stable'
+        run: |
+          cargo clippy --locked --no-default-features --all-targets -- -D warnings
+          cargo clippy --locked --features extension-module -- -D warnings
+      - name: Validate published crate contents and build
+        if: matrix.toolchain == 'stable'
+        run: cargo publish --dry-run --locked
+
+  artifacts:
+    name: Installed ${{ matrix.artifact }} (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - artifact: wheel
+            python: "3.10"
+            command: build
+            args: --release --locked --out dist
+            glob: "*.whl"
+          - artifact: sdist
+            python: "3.13"
+            command: sdist
+            args: --out dist
+            glob: "*.tar.gz"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - name: Build distribution
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: ${{ matrix.command }}
+          args: ${{ matrix.args }}
+      - name: Test installation outside the checkout
+        shell: bash
+        env:
+          TEST_PYTHON: ${{ matrix.python }}
+        run: |
+          uv venv --no-project --python "$TEST_PYTHON" "$RUNNER_TEMP/reducers-artifact"
+          source "$RUNNER_TEMP/reducers-artifact/bin/activate"
+          for artifact in dist/*; do
+            uv pip install --python "$VIRTUAL_ENV" --index-url https://pypi.org/simple "${artifact}[test,bench]"
+          done
+          export EXPECTED_VERSION
+          EXPECTED_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -n 1)
+          cd "$RUNNER_TEMP"
+          python -I "$GITHUB_WORKSPACE/scripts/smoke_install.py"
+          uv run --no-project --active pytest --import-mode=importlib -q "$GITHUB_WORKSPACE/tests"
+      - name: Ensure builds preserved lockfiles
+        run: git diff --exit-code -- Cargo.lock uv.lock
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ci-${{ matrix.artifact }}
+          path: dist/${{ matrix.glob }}
+          if-no-files-found: error

@@ -1,8 +1,8 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -12,145 +12,170 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  UV_NO_SOURCES: "true"
+
 jobs:
-  test:
-    name: Test
+  verify:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - name: Verify release identity and changelog
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: >-
+          python scripts/check_release.py --require-clean --tag "$RELEASE_TAG"
+          --github-output "$GITHUB_OUTPUT" --notes-output release-notes.md
+      - uses: actions/upload-artifact@v6
         with:
-          enable-cache: true
-
-      - name: Install Rust toolchain
-        run: rustup toolchain install stable --profile minimal --component clippy
-
-      - name: Install test environment
-        run: uv sync --extra dev
-
-      - name: Check pure Rust crate
-        run: cargo check --no-default-features
-
-      - name: Check extension build
-        run: cargo check --features extension-module
-
-      - name: Run Rust tests
-        run: cargo test
-
-      - name: Run clippy
-        run: cargo clippy --features extension-module -- -D warnings
-
-      - name: Build extension for Python tests
-        run: uv run maturin develop --release
-
-      - name: Run Python tests
-        run: uv run python -m pytest -q
-
-  build-sdist:
-    name: Build source distribution
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
-        with:
-          enable-cache: true
-
-      - name: Build sdist
-        run: uv run --extra dev maturin build --release --sdist --out dist
-
-      - name: Upload sdist
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdist
-          path: dist/*.tar.gz
+          name: release-notes
+          path: release-notes.md
           if-no-files-found: error
 
-  build-wheels:
-    name: Build ${{ matrix.target }} wheel
-    needs: test
-    runs-on: ${{ matrix.os }}
+  checks:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  wheels:
+    needs: verify
+    name: Wheel (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
+        platform:
+          - name: linux-x86_64
+            runner: ubuntu-22.04
             target: x86_64
-          - os: macos-13
-            target: x86_64
-          - os: macos-14
+            manylinux: "2014"
+          - name: linux-aarch64
+            runner: ubuntu-24.04-arm
             target: aarch64
-          - os: windows-latest
+            manylinux: "2014"
+          - name: macos-x86_64
+            runner: macos-15-intel
+            target: x86_64
+            manylinux: "off"
+          - name: macos-aarch64
+            runner: macos-15
+            target: aarch64
+            manylinux: "off"
+          - name: windows-x86_64
+            runner: windows-2022
             target: x64
+            manylinux: "off"
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Build wheel
-        uses: PyO3/maturin-action@v1
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          target: ${{ matrix.target }}
-          args: --release --out dist
-          sccache: true
-          manylinux: auto
-
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
+          python-version: "3.10"
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - name: Build ABI3 wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.manylinux }}
+          args: --release --locked --compatibility pypi --out dist
+      - name: Test installed wheel
+        env:
+          EXPECTED_VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          uv venv --no-project --python 3.10 "$RUNNER_TEMP/reducers-wheel"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            source "$RUNNER_TEMP/reducers-wheel/Scripts/activate"
+          else
+            source "$RUNNER_TEMP/reducers-wheel/bin/activate"
+          fi
+          for wheel in dist/*.whl; do
+            uv pip install --python "$VIRTUAL_ENV" --index-url https://pypi.org/simple "${wheel}[test,bench]"
+          done
+          cd "$RUNNER_TEMP"
+          python -I "$GITHUB_WORKSPACE/scripts/smoke_install.py"
+          uv run --no-project --active pytest --import-mode=importlib -q "$GITHUB_WORKSPACE/tests"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: wheels-${{ matrix.platform.name }}
           path: dist/*.whl
           if-no-files-found: error
 
-  publish-pypi:
-    name: Publish to PyPI
-    needs: [build-sdist, build-wheels]
+  pypi:
+    # Dispatch is build-only, even when the selected ref is a release tag.
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [verify, checks, wheels]
     runs-on: ubuntu-latest
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/project/reducers/
     permissions:
       id-token: write
     steps:
-      - name: Download release distributions
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
+          pattern: wheels-*
           path: dist
           merge-multiple: true
-
-      - name: Publish distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: actions/download-artifact@v7
         with:
-          packages-dir: dist
-          print-hash: true
+          name: ci-sdist
+          path: dist
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+      - name: Publish tested distributions to PyPI
+        run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/ dist/*
 
-  publish-crate:
-    name: Publish to crates.io
-    needs: test
+  crates-io:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [verify, checks, wheels]
     runs-on: ubuntu-latest
-    environment: crates-io
-    if: ${{ github.event_name == 'release' }}
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/reducers
+    permissions:
+      contents: read
+      id-token: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        run: rustup toolchain install stable --profile minimal
-
-      - name: Publish crate
-        run: cargo publish --token "$CARGO_REGISTRY_TOKEN"
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1.0.5
+        id: auth
+      - name: Publish to crates.io
+        run: cargo publish --locked
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  github-release:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [pypi, crates-io]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v7
+        with:
+          name: ci-sdist
+          path: dist
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-notes
+          path: notes
+      - name: Create GitHub release after both registries succeed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: >-
+          gh release create "$RELEASE_TAG" dist/* --verify-tag
+          --title "$RELEASE_TAG" --notes-file notes/release-notes.md
