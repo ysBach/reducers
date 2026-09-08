@@ -2,386 +2,349 @@
 title: "Stack Axis Benchmarks"
 ---
 
-Representative stack reductions.
-
-Run locally with:
+Recorded **2026-09-08**, reducers **0.4.0 + overflow fix (`eb27fc0`)**.
+[Environment and setup](../performance.qmd#recorded-environment) ·
+[Complete output](results/2026-09-08/axis.txt) ·
+[Excluded baselines](results/2026-09-08/axis-exclusions.txt)
 
 ```bash
-uv run --extra bench python benchmarks/benchmark_axis.py
-uv run --extra bench python benchmarks/benchmark_axis.py --ops average
+uv run --no-sync python benchmarks/benchmark_axis.py --repeats 15 --warmups 3
 ```
 
-`np`, `bn`, and `rd` are trimmed median elapsed ms. `np/rd` and `bn/rd` above `1` mean `reducers` is faster; ratios are **bolded** when **`reducers` ratio > 0.95**.
+Times are median milliseconds per call over 15 samples after 3 warmups;
+the lowest and highest samples are discarded. Ratios above 1 favor reducers;
+bold means a ratio above 0.95 (within 5%). `-` means unavailable; `n/a` means
+the baseline failed the accuracy check. Ratios use unrounded times.
 
-* `std` and `nanstd` use `ddof=1`.
-* `average` and `nanaverage` use 1-D weights whose length matches the reduced axis (100 for the cube; 11 or 31 for the short stacks). `percentile`/`quantile` use `[16, 50, 84]`.
-* `nanaverage` compares against masked `np.average`; Bottleneck has no weighted-average reducer.
-* `nanpercentile`/`nanquantile` are omitted because NumPy's axis path is extremely slow here.
+Inputs are prebuilt contiguous arrays; reducers uses its default validation.
+`var` uses `ddof=0`, `std` uses `ddof=1`. Averages use one weight per reduced-axis
+position, uniform on `[0.5, 1.5)`. NumPy `nanaverage` uses a masked array prepared
+before timing. Percentile requests `[16, 50, 84]`; quantile requests
+`[0.16, 0.50, 0.84]`. NaN-aware inputs have a NaN every 97 elements.
+Axis `nanpercentile`/`nanquantile` are outside this matrix; no speed claim is made
+for them. Cheap calls can be sensitive to scheduling noise.
 
-## Plain Results
 
-### General cube `(100, 100, 100)`
+## Plain, float64
 
-At this size, `reducers` wins the most cases.
+::: {.panel-tabset}
 
-::: {{.panel-tabset}}
-
-#### axis=0, float64
-
-| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
-|---|---:|---:|---:|---:|---:|
-| `mean` | 0.18 | - | 0.11 | **1.58x** | - |
-| `average` | 0.29 | - | 0.37 | 0.77x | - |
-| `median` | 8.97 | 7.93 | 0.65 | **13.72x** | **12.12x** |
-| `var` | 0.63 | - | 0.18 | **3.56x** | - |
-| `std` | 0.63 | - | 0.14 | **4.43x** | - |
-| `min` | 0.18 | - | 0.11 | **1.59x** | - |
-| `max` | 0.17 | - | 0.14 | **1.27x** | - |
-| `minmax` | 0.34 | - | 0.15 | **2.31x** | - |
-| `sum` | 0.16 | - | 0.10 | **1.67x** | - |
-| `percentile` | 14.92 | - | 1.67 | **8.92x** | - |
-| `quantile` | 14.94 | - | 1.66 | **9.02x** | - |
-
-#### axis=-1, float64
+### (100, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `mean` | 0.17 | - | 0.07 | **2.37x** | - |
-| `average` | 0.48 | - | 0.13 | **3.66x** | - |
-| `median` | 8.41 | 7.67 | 0.63 | **13.34x** | **12.17x** |
-| `var` | 0.70 | - | 0.16 | **4.47x** | - |
-| `std` | 0.71 | - | 0.14 | **4.97x** | - |
-| `min` | 0.12 | - | 0.15 | 0.80x | - |
+| `mean` | 0.16 | - | 0.10 | **1.57x** | - |
+| `average` | 0.28 | - | 0.38 | 0.74x | - |
+| `median` | 8.68 | 7.77 | 0.66 | **13.24x** | **11.84x** |
+| `var` | 0.61 | - | 0.17 | **3.53x** | - |
+| `std` | 0.61 | - | 0.17 | **3.66x** | - |
+| `min` | 0.17 | - | 0.11 | **1.53x** | - |
+| `max` | 0.17 | - | 0.13 | **1.30x** | - |
+| `minmax` | 0.34 | - | 0.14 | **2.51x** | - |
+| `sum` | 0.15 | - | 0.10 | **1.56x** | - |
+| `percentile` | 14.30 | - | 1.70 | **8.43x** | - |
+| `quantile` | 14.21 | - | 1.64 | **8.65x** | - |
+
+### (100, 100, 100), axis=-1
+
+| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `mean` | 0.18 | - | 0.07 | **2.49x** | - |
+| `average` | 0.48 | - | 0.15 | **3.24x** | - |
+| `median` | 8.36 | 7.43 | 0.62 | **13.49x** | **11.99x** |
+| `var` | 0.69 | - | 0.19 | **3.55x** | - |
+| `std` | 0.70 | - | 0.20 | **3.55x** | - |
+| `min` | 0.12 | - | 0.15 | 0.81x | - |
 | `max` | 0.12 | - | 0.15 | 0.80x | - |
-| `minmax` | 0.26 | - | 0.20 | **1.33x** | - |
-| `sum` | 0.18 | - | 0.07 | **2.37x** | - |
-| `percentile` | 14.13 | - | 1.58 | **8.93x** | - |
-| `quantile` | 14.04 | - | 1.56 | **9.02x** | - |
+| `minmax` | 0.26 | - | 0.19 | **1.36x** | - |
+| `sum` | 0.17 | - | 0.07 | **2.41x** | - |
+| `percentile` | 13.65 | - | 1.55 | **8.79x** | - |
+| `quantile` | 13.83 | - | 1.57 | **8.80x** | - |
 
-#### axis=0, float32
-
-| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
-|---|---:|---:|---:|---:|---:|
-| `mean` | 0.07 | - | 0.09 | 0.83x | - |
-| `average` | 0.13 | - | 0.34 | 0.37x | - |
-| `median` | 8.83 | 7.85 | 0.66 | **13.39x** | **11.91x** |
-| `var` | 0.26 | - | 0.13 | **1.92x** | - |
-| `std` | 0.26 | - | 0.19 | **1.37x** | - |
-| `min` | 0.06 | - | 0.08 | 0.73x | - |
-| `max` | 0.07 | - | 0.08 | 0.84x | - |
-| `minmax` | 0.13 | - | 0.09 | **1.41x** | - |
-| `sum` | 0.06 | - | 0.08 | 0.81x | - |
-| `percentile` | 15.62 | - | 1.71 | **9.12x** | - |
-| `quantile` | 16.01 | - | 1.73 | **9.26x** | - |
-
-#### axis=-1, float32
+### (11, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `mean` | 0.17 | - | 0.11 | **1.62x** | - |
-| `average` | 0.31 | - | 0.20 | **1.56x** | - |
-| `median` | 8.39 | 7.96 | 0.64 | **13.01x** | **12.34x** |
-| `var` | 0.52 | - | 0.13 | **4.05x** | - |
-| `std` | 0.52 | - | 0.13 | **3.91x** | - |
-| `min` | 0.10 | - | 0.10 | **1.06x** | - |
-| `max` | 0.10 | - | 0.09 | **1.07x** | - |
-| `minmax` | 0.22 | - | 0.12 | **1.92x** | - |
-| `sum` | 0.17 | - | 0.11 | **1.60x** | - |
-| `percentile` | 14.08 | - | 1.50 | **9.36x** | - |
-| `quantile` | 14.21 | - | 1.57 | **9.05x** | - |
-
-:::
-
-### Short `axis=0` stacks
-
-Cases where `shape[0]` is small with `axis=0`, `reducers` may lose to NumPy/Bottleneck for *cheap* reductions (like min, max, mean, sum).
-
-Larger `shape[0]` or output size (`prod(*shape[1:])`) makes `reducers` win over NumPy/Bottleneck.
-
-::: {{.panel-tabset}}
-
-#### (11, 100, 100), float64
-
-| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
-|---|---:|---:|---:|---:|---:|
-| `mean` | 0.02 | - | 0.02 | **0.99x** | - |
-| `average` | 0.04 | - | 0.06 | 0.77x | - |
-| `median` | 0.90 | 0.70 | 0.22 | **4.04x** | **3.13x** |
-| `var` | 0.07 | - | 0.07 | **0.98x** | - |
-| `std` | 0.07 | - | 0.04 | **1.59x** | - |
-| `min` | 0.02 | - | 0.03 | 0.69x | - |
+| `mean` | 0.02 | - | 0.02 | 0.91x | - |
+| `average` | 0.04 | - | 0.06 | 0.78x | - |
+| `median` | 0.84 | 0.64 | 0.23 | **3.69x** | **2.82x** |
+| `var` | 0.07 | - | 0.07 | **0.99x** | - |
+| `std` | 0.08 | - | 0.08 | **1.00x** | - |
+| `min` | 0.02 | - | 0.03 | 0.77x | - |
 | `max` | 0.02 | - | 0.03 | 0.77x | - |
 | `minmax` | 0.04 | - | 0.04 | **1.00x** | - |
 | `sum` | 0.02 | - | 0.03 | 0.84x | - |
-| `percentile` | 1.31 | - | 0.68 | **1.92x** | - |
-| `quantile` | 1.26 | - | 0.68 | **1.87x** | - |
+| `percentile` | 1.26 | - | 0.61 | **2.05x** | - |
+| `quantile` | 1.23 | - | 0.63 | **1.97x** | - |
 
-#### (31, 100, 100), float64
+### (31, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `mean` | 0.06 | - | 0.06 | **1.00x** | - |
+| `mean` | 0.06 | - | 0.06 | **0.99x** | - |
 | `average` | 0.10 | - | 0.14 | 0.77x | - |
-| `median` | 3.09 | 2.59 | 0.27 | **11.41x** | **9.57x** |
-| `var` | 0.18 | - | 0.06 | **3.34x** | - |
-| `std` | 0.20 | - | 0.06 | **3.39x** | - |
-| `min` | 0.05 | - | 0.06 | 0.83x | - |
+| `median` | 2.99 | 2.42 | 0.31 | **9.50x** | **7.69x** |
+| `var` | 0.19 | - | 0.17 | **1.11x** | - |
+| `std` | 0.20 | - | 0.17 | **1.13x** | - |
+| `min` | 0.05 | - | 0.06 | 0.84x | - |
 | `max` | 0.05 | - | 0.06 | 0.84x | - |
-| `minmax` | 0.11 | - | 0.10 | **1.09x** | - |
-| `sum` | 0.05 | - | 0.05 | **1.08x** | - |
-| `percentile` | 5.06 | - | 0.81 | **6.27x** | - |
-| `quantile` | 5.07 | - | 0.85 | **5.99x** | - |
+| `minmax` | 0.11 | - | 0.10 | **1.08x** | - |
+| `sum` | 0.05 | - | 0.06 | 0.82x | - |
+| `percentile` | 4.99 | - | 0.83 | **6.03x** | - |
+| `quantile` | 4.96 | - | 0.83 | **5.95x** | - |
 
-#### (11, 512, 512), float64
-
-| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
-|---|---:|---:|---:|---:|---:|
-| `mean` | 0.57 | - | 0.23 | **2.51x** | - |
-| `average` | 0.89 | - | 0.94 | 0.95x | - |
-| `median` | 30.00 | 24.06 | 3.36 | **8.92x** | **7.15x** |
-| `var` | 1.96 | - | 0.47 | **4.17x** | - |
-| `std` | 1.96 | - | 0.48 | **4.11x** | - |
-| `min` | 0.48 | - | 0.21 | **2.31x** | - |
-| `max` | 0.48 | - | 0.22 | **2.20x** | - |
-| `minmax` | 0.96 | - | 0.36 | **2.65x** | - |
-| `sum` | 0.54 | - | 0.24 | **2.27x** | - |
-| `percentile` | 36.16 | - | 15.15 | **2.39x** | - |
-| `quantile` | 36.22 | - | 14.64 | **2.47x** | - |
-
-#### (11, 100, 100), float32
+### (11, 512, 512), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `mean` | 0.01 | - | 0.02 | 0.84x | - |
-| `average` | 0.02 | - | 0.05 | 0.45x | - |
-| `median` | 0.94 | 0.75 | 0.24 | **3.95x** | **3.13x** |
-| `var` | 0.04 | - | 0.05 | 0.78x | - |
-| `std` | 0.04 | - | 0.05 | 0.78x | - |
+| `mean` | 0.52 | - | 0.24 | **2.20x** | - |
+| `average` | 0.89 | - | 0.90 | **0.99x** | - |
+| `median` | 29.77 | 23.44 | 3.29 | **9.06x** | **7.13x** |
+| `var` | 1.97 | - | 0.44 | **4.44x** | - |
+| `std` | 1.97 | - | 0.45 | **4.37x** | - |
+| `min` | 0.51 | - | 0.21 | **2.42x** | - |
+| `max` | 0.49 | - | 0.24 | **2.06x** | - |
+| `minmax` | 0.99 | - | 0.34 | **2.91x** | - |
+| `sum` | 0.54 | - | 0.23 | **2.38x** | - |
+| `percentile` | 35.83 | - | 10.26 | **3.49x** | - |
+| `quantile` | 35.90 | - | 10.12 | **3.55x** | - |
+
+:::
+
+## Plain, float32
+
+::: {.panel-tabset}
+
+### (100, 100, 100), axis=0
+
+| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `mean` | 0.07 | - | 0.08 | 0.87x | - |
+| `average` | 0.13 | - | 0.34 | 0.39x | - |
+| `median` | 8.79 | 7.88 | 0.67 | **13.20x** | **11.82x** |
+| `var` | 0.25 | - | 0.15 | **1.66x** | - |
+| `std` | 0.26 | - | 0.15 | **1.74x** | - |
+| `min` | 0.07 | - | 0.09 | 0.73x | - |
+| `max` | 0.06 | - | 0.09 | 0.71x | - |
+| `minmax` | 0.13 | - | 0.11 | **1.21x** | - |
+| `sum` | 0.06 | - | 0.10 | 0.60x | - |
+| `percentile` | 14.54 | - | 1.77 | **8.21x** | - |
+| `quantile` | 15.01 | - | 1.72 | **8.73x** | - |
+
+### (100, 100, 100), axis=-1
+
+| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `mean` | 0.17 | - | 0.10 | **1.66x** | - |
+| `average` | 0.31 | - | 0.20 | **1.60x** | - |
+| `median` | 8.25 | 7.67 | 0.65 | **12.76x** | **11.86x** |
+| `var` | 0.52 | - | 0.23 | **2.23x** | - |
+| `std` | 0.52 | - | 0.25 | **2.09x** | - |
+| `min` | 0.10 | - | 0.10 | **1.01x** | - |
+| `max` | 0.11 | - | 0.10 | **1.04x** | - |
+| `minmax` | 0.20 | - | 0.12 | **1.67x** | - |
+| `sum` | 0.17 | - | 0.11 | **1.54x** | - |
+| `percentile` | 13.97 | - | 1.60 | **8.75x** | - |
+| `quantile` | 13.77 | - | 1.64 | **8.37x** | - |
+
+### (11, 100, 100), axis=0
+
+| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `mean` | 0.01 | - | 0.02 | 0.79x | - |
+| `average` | 0.02 | - | 0.05 | 0.46x | - |
+| `median` | 0.89 | 0.72 | 0.19 | **4.74x** | **3.79x** |
+| `var` | 0.04 | - | 0.06 | 0.67x | - |
+| `std` | 0.04 | - | 0.07 | 0.65x | - |
 | `min` | 0.01 | - | 0.01 | 0.64x | - |
-| `max` | 0.01 | - | 0.01 | 0.68x | - |
-| `minmax` | 0.02 | - | 0.02 | 0.83x | - |
-| `sum` | 0.01 | - | 0.02 | 0.56x | - |
-| `percentile` | 1.24 | - | 0.56 | **2.22x** | - |
-| `quantile` | 1.28 | - | 0.59 | **2.18x** | - |
+| `max` | 0.01 | - | 0.01 | 0.63x | - |
+| `minmax` | 0.02 | - | 0.02 | 0.89x | - |
+| `sum` | 0.01 | - | 0.02 | 0.57x | - |
+| `percentile` | 1.25 | - | 0.59 | **2.12x** | - |
+| `quantile` | 1.25 | - | 0.60 | **2.06x** | - |
 
-#### (31, 100, 100), float32
+### (31, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `mean` | 0.03 | - | 0.04 | 0.73x | - |
+| `mean` | 0.03 | - | 0.04 | 0.72x | - |
 | `average` | 0.05 | - | 0.13 | 0.40x | - |
-| `median` | 3.02 | 2.61 | 0.31 | **9.66x** | **8.34x** |
-| `var` | 0.09 | - | 0.06 | **1.58x** | - |
-| `std` | 0.09 | - | 0.06 | **1.62x** | - |
-| `min` | 0.02 | - | 0.03 | 0.64x | - |
-| `max` | 0.02 | - | 0.03 | 0.71x | - |
-| `minmax` | 0.04 | - | 0.05 | 0.91x | - |
+| `median` | 3.02 | 2.59 | 0.28 | **10.94x** | **9.41x** |
+| `var` | 0.09 | - | 0.15 | 0.60x | - |
+| `std` | 0.09 | - | 0.18 | 0.53x | - |
+| `min` | 0.02 | - | 0.03 | 0.80x | - |
+| `max` | 0.02 | - | 0.03 | 0.65x | - |
+| `minmax` | 0.04 | - | 0.05 | 0.92x | - |
 | `sum` | 0.02 | - | 0.04 | 0.60x | - |
-| `percentile` | 4.99 | - | 0.69 | **7.20x** | - |
-| `quantile` | 5.07 | - | 0.69 | **7.33x** | - |
+| `percentile` | 5.15 | - | 0.74 | **6.93x** | - |
+| `quantile` | 5.08 | - | 0.74 | **6.84x** | - |
 
-#### (11, 512, 512), float32
+### (11, 512, 512), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `mean` | 0.39 | - | 0.16 | **2.44x** | - |
-| `average` | 0.43 | - | 0.92 | 0.47x | - |
-| `median` | 31.90 | 25.61 | 9.29 | **3.43x** | **2.76x** |
-| `var` | 1.19 | - | 0.41 | **2.88x** | - |
-| `std` | 1.20 | - | 0.46 | **2.60x** | - |
-| `min` | 0.24 | - | 0.14 | **1.65x** | - |
-| `max` | 0.24 | - | 0.15 | **1.68x** | - |
-| `minmax` | 0.47 | - | 0.22 | **2.10x** | - |
-| `sum` | 0.26 | - | 0.21 | **1.22x** | - |
-| `percentile` | 38.17 | - | 10.67 | **3.58x** | - |
-| `quantile` | 39.00 | - | 10.46 | **3.73x** | - |
+| `mean` | 0.37 | - | 0.20 | **1.85x** | - |
+| `average` | 0.44 | - | 0.87 | 0.50x | - |
+| `median` | 29.52 | 23.52 | 2.30 | **12.85x** | **10.24x** |
+| `var` | 1.17 | - | 0.37 | **3.12x** | - |
+| `std` | 1.15 | - | 0.39 | **2.92x** | - |
+| `min` | 0.25 | - | 0.15 | **1.65x** | - |
+| `max` | 0.25 | - | 0.14 | **1.70x** | - |
+| `minmax` | 0.48 | - | 0.20 | **2.37x** | - |
+| `sum` | 0.27 | - | 0.17 | **1.62x** | - |
+| `percentile` | 36.05 | - | 13.33 | **2.70x** | - |
+| `quantile` | 35.99 | - | 13.45 | **2.68x** | - |
 
 :::
 
-## NaN-aware Results
+## NaN-aware, float64
 
-Same shapes with about 1% NaNs.
+::: {.panel-tabset}
 
-`np.nanpercentile` / `np.nanquantile` are omitted: locally they were extremely slow (often >100x times slower than `rd`) and dominated benchmark runtime.
-
-### General cube `(100, 100, 100)`
-
-At this size, `reducers` wins the most cases.
-
-::: {{.panel-tabset}}
-
-#### axis=0, float64
+### (100, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.95 | 0.69 | 0.17 | **5.67x** | **4.12x** |
-| `nanaverage` | 3.62 | - | 0.46 | **7.82x** | - |
-| `nanmedian` | 29.99 | 7.80 | 0.48 | **62.90x** | **16.36x** |
-| `nanvar` | 2.12 | 1.75 | 0.28 | **7.55x** | **6.24x** |
-| `nanstd` | 2.22 | 1.80 | 0.23 | **9.77x** | **7.89x** |
-| `nanmin` | 0.18 | 0.68 | 0.11 | **1.62x** | **6.22x** |
-| `nanmax` | 0.17 | 0.67 | 0.10 | **1.78x** | **6.90x** |
-| `nanminmax` | 0.35 | 1.36 | 0.13 | **2.78x** | **10.74x** |
-| `nansum` | 0.51 | 0.65 | 0.17 | **2.92x** | **3.75x** |
+| `nanmean` | 0.94 | 0.73 | 0.17 | **5.37x** | **4.18x** |
+| `nanaverage` | 3.70 | - | 0.45 | **8.31x** | - |
+| `nanmedian` | 28.10 | 7.50 | 0.47 | **59.39x** | **15.85x** |
+| `nanvar` | 2.10 | 1.66 | 0.27 | **7.74x** | **6.12x** |
+| `nanstd` | 2.10 | 1.69 | 0.28 | **7.54x** | **6.05x** |
+| `nanmin` | 0.17 | 0.65 | 0.09 | **1.88x** | **7.12x** |
+| `nanmax` | 0.17 | 0.66 | 0.09 | **1.84x** | **6.99x** |
+| `nanminmax` | 0.35 | 1.33 | 0.13 | **2.61x** | **9.98x** |
+| `nansum` | 0.49 | 0.64 | 0.19 | **2.63x** | **3.40x** |
 
-#### axis=-1, float64
-
-| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
-|---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.73 | 0.71 | 0.15 | **4.72x** | **4.59x** |
-| `nanaverage` | 3.89 | - | 0.16 | **24.69x** | - |
-| `nanmedian` | 27.08 | 7.87 | 0.44 | **62.22x** | **18.07x** |
-| `nanvar` | 1.98 | 1.64 | 0.17 | **11.33x** | **9.42x** |
-| `nanstd` | 2.13 | 1.70 | 0.17 | **12.50x** | **9.94x** |
-| `nanmin` | 0.13 | 0.69 | 0.12 | **1.05x** | **5.55x** |
-| `nanmax` | 0.13 | 0.65 | 0.13 | **0.96x** | **4.94x** |
-| `nanminmax` | 0.26 | 1.37 | 0.18 | **1.47x** | **7.74x** |
-| `nansum` | 0.51 | 0.64 | 0.15 | **3.51x** | **4.37x** |
-
-#### axis=0, float32
+### (100, 100, 100), axis=-1
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.74 | 0.64 | 0.18 | **4.11x** | **3.55x** |
-| `nanaverage` | 3.11 | - | 0.49 | **6.30x** | - |
-| `nanmedian` | 27.60 | 7.71 | 0.49 | **56.90x** | **15.90x** |
-| `nanvar` | 1.63 | 1.64 | 0.27 | **5.98x** | **6.02x** |
-| `nanstd` | 1.64 | 1.71 | 0.27 | **6.00x** | **6.27x** |
-| `nanmin` | 0.06 | 0.66 | 0.08 | 0.83x | **8.42x** |
-| `nanmax` | 0.07 | 0.63 | 0.07 | **1.01x** | **9.11x** |
-| `nanminmax` | 0.14 | 1.31 | 0.09 | **1.55x** | **14.32x** |
-| `nansum` | 0.31 | 0.65 | 0.18 | **1.69x** | **3.61x** |
+| `nanmean` | 0.71 | 0.66 | 0.15 | **4.70x** | **4.39x** |
+| `nanaverage` | 3.95 | - | 0.16 | **25.07x** | - |
+| `nanmedian` | 25.48 | 8.04 | 0.96 | **26.48x** | **8.35x** |
+| `nanvar` | 1.96 | 1.62 | 0.32 | **6.12x** | **5.06x** |
+| `nanstd` | 1.95 | 1.65 | 0.32 | **6.02x** | **5.08x** |
+| `nanmin` | 0.12 | 0.64 | 0.12 | **1.06x** | **5.50x** |
+| `nanmax` | 0.13 | 0.64 | 0.12 | **1.05x** | **5.27x** |
+| `nanminmax` | 0.25 | 1.32 | 0.17 | **1.50x** | **7.87x** |
+| `nansum` | 0.50 | 0.63 | 0.15 | **3.38x** | **4.26x** |
 
-#### axis=-1, float32
-
-| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
-|---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.64 | 0.66 | 0.15 | **4.17x** | **4.35x** |
-| `nanaverage` | 3.52 | - | 0.23 | **15.11x** | - |
-| `nanmedian` | 26.90 | 7.96 | 0.48 | **56.39x** | **16.68x** |
-| `nanvar` | 1.67 | 1.76 | 0.16 | **10.36x** | **10.91x** |
-| `nanstd` | 1.69 | 1.69 | 0.17 | **10.22x** | **10.18x** |
-| `nanmin` | 0.10 | 0.65 | 0.09 | **1.14x** | **7.20x** |
-| `nanmax` | 0.10 | 0.64 | 0.09 | **1.20x** | **7.47x** |
-| `nanminmax` | 0.21 | 1.29 | 0.11 | **1.92x** | **12.07x** |
-| `nansum` | 0.41 | 0.63 | 0.15 | **2.70x** | **4.09x** |
-
-:::
-
-### Short `axis=0` stacks
-
-Cases where `shape[0]` is small with `axis=0`, `reducers` may lose to NumPy/Bottleneck for *cheap* reductions (like min, max, mean, sum).
-
-Larger `shape[0]` or output size (`prod(*shape[1:])`) makes `reducers` win over NumPy/Bottleneck.
-
-::: {{.panel-tabset}}
-
-#### (11, 100, 100), float64
+### (11, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.12 | 0.03 | 0.05 | **2.13x** | 0.63x |
-| `nanaverage` | 0.48 | - | 0.08 | **6.19x** | - |
-| `nanmedian` | 1.92 | 0.74 | 0.21 | **9.00x** | **3.47x** |
-| `nanvar` | 0.25 | 0.09 | 0.05 | **4.62x** | **1.70x** |
-| `nanstd` | 0.26 | 0.09 | 0.05 | **5.14x** | **1.87x** |
-| `nanmin` | 0.02 | 0.04 | 0.02 | **1.05x** | **2.07x** |
-| `nanmax` | 0.02 | 0.04 | 0.02 | **1.05x** | **1.96x** |
-| `nanminmax` | 0.04 | 0.08 | 0.03 | **1.24x** | **2.46x** |
-| `nansum` | 0.06 | 0.04 | 0.05 | **1.09x** | 0.71x |
+| `nanmean` | 0.12 | 0.03 | 0.05 | **2.11x** | 0.62x |
+| `nanaverage` | 0.49 | - | 0.08 | **6.30x** | - |
+| `nanmedian` | 1.80 | 0.71 | 0.20 | **8.99x** | **3.55x** |
+| `nanvar` | 0.25 | 0.09 | 0.10 | **2.46x** | 0.92x |
+| `nanstd` | 0.26 | 0.10 | 0.10 | **2.50x** | **0.98x** |
+| `nanmin` | 0.02 | 0.04 | 0.02 | **1.05x** | **2.08x** |
+| `nanmax` | 0.02 | 0.04 | 0.02 | **1.04x** | **2.07x** |
+| `nanminmax` | 0.04 | 0.08 | 0.03 | **1.24x** | **2.45x** |
+| `nansum` | 0.06 | 0.04 | 0.05 | **1.09x** | 0.72x |
 
-#### (31, 100, 100), float64
+### (31, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.30 | 0.14 | 0.14 | **2.20x** | **1.00x** |
-| `nanaverage` | 1.18 | - | 0.20 | **6.04x** | - |
-| `nanmedian` | 6.78 | 2.65 | 0.31 | **21.78x** | **8.50x** |
-| `nanvar` | 0.66 | 0.36 | 0.10 | **6.39x** | **3.46x** |
-| `nanstd` | 0.65 | 0.37 | 0.08 | **7.73x** | **4.42x** |
+| `nanmean` | 0.29 | 0.14 | 0.14 | **2.14x** | **0.99x** |
+| `nanaverage` | 1.18 | - | 0.20 | **5.88x** | - |
+| `nanmedian` | 6.48 | 2.56 | 0.31 | **20.56x** | **8.14x** |
+| `nanvar` | 0.66 | 0.37 | 0.25 | **2.62x** | **1.45x** |
+| `nanstd` | 0.67 | 0.38 | 0.25 | **2.63x** | **1.48x** |
 | `nanmin` | 0.06 | 0.13 | 0.05 | **1.03x** | **2.43x** |
-| `nanmax` | 0.06 | 0.13 | 0.05 | **1.03x** | **2.44x** |
-| `nanminmax` | 0.11 | 0.26 | 0.09 | **1.25x** | **2.95x** |
-| `nansum` | 0.16 | 0.14 | 0.14 | **1.16x** | **1.00x** |
+| `nanmax` | 0.06 | 0.13 | 0.05 | **1.02x** | **2.43x** |
+| `nanminmax` | 0.11 | 0.26 | 0.09 | **1.22x** | **2.91x** |
+| `nansum` | 0.16 | 0.13 | 0.13 | **1.16x** | **0.98x** |
 
-#### (11, 512, 512), float64
-
-| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
-|---|---:|---:|---:|---:|---:|
-| `nanmean` | 3.08 | 1.44 | 0.35 | **8.80x** | **4.13x** |
-| `nanaverage` | 12.21 | - | 1.12 | **10.86x** | - |
-| `nanmedian` | 59.04 | 25.39 | 4.23 | **13.95x** | **6.00x** |
-| `nanvar` | 6.49 | 5.17 | 0.57 | **11.44x** | **9.13x** |
-| `nanstd` | 6.51 | 5.30 | 0.56 | **11.59x** | **9.43x** |
-| `nanmin` | 0.50 | 1.40 | 0.24 | **2.05x** | **5.75x** |
-| `nanmax` | 0.50 | 1.39 | 0.21 | **2.44x** | **6.77x** |
-| `nanminmax` | 1.06 | 2.78 | 0.65 | **1.63x** | **4.27x** |
-| `nansum` | 1.55 | 1.33 | 0.35 | **4.40x** | **3.78x** |
-
-#### (11, 100, 100), float32
+### (11, 512, 512), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.10 | 0.04 | 0.06 | **1.67x** | 0.74x |
-| `nanaverage` | 0.43 | - | 0.08 | **5.58x** | - |
-| `nanmedian` | 1.73 | 0.71 | 0.21 | **8.14x** | **3.34x** |
-| `nanvar` | 0.20 | 0.09 | 0.05 | **3.62x** | **1.58x** |
-| `nanstd` | 0.21 | 0.09 | 0.05 | **3.99x** | **1.70x** |
-| `nanmin` | 0.01 | 0.04 | 0.01 | **1.10x** | **5.13x** |
+| `nanmean` | 2.92 | 1.45 | 0.39 | **7.49x** | **3.72x** |
+| `nanaverage` | 11.75 | - | 1.09 | **10.77x** | - |
+| `nanmedian` | 57.99 | 24.46 | 2.93 | **19.78x** | **8.34x** |
+| `nanvar` | 6.45 | 5.43 | 0.59 | **10.96x** | **9.23x** |
+| `nanstd` | 6.78 | 5.13 | 0.64 | **10.61x** | **8.03x** |
+| `nanmin` | 0.51 | 1.37 | 0.18 | **2.78x** | **7.52x** |
+| `nanmax` | 0.52 | 1.39 | 0.20 | **2.55x** | **6.78x** |
+| `nanminmax` | 0.98 | 2.76 | 0.67 | **1.47x** | **4.14x** |
+| `nansum` | 1.53 | 1.34 | 0.38 | **4.09x** | **3.57x** |
+
+:::
+
+## NaN-aware, float32
+
+::: {.panel-tabset}
+
+### (100, 100, 100), axis=0
+
+| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `nanmean` | 0.74 | 0.69 | 0.19 | **3.86x** | **3.63x** |
+| `nanaverage` | 3.11 | - | 0.48 | **6.47x** | - |
+| `nanmedian` | 26.48 | 7.41 | 0.47 | **56.54x** | **15.81x** |
+| `nanvar` | 1.61 | 1.62 | 0.30 | **5.38x** | **5.39x** |
+| `nanstd` | 1.63 | 1.64 | 0.30 | **5.38x** | **5.39x** |
+| `nanmin` | 0.06 | 0.63 | 0.07 | 0.93x | **9.08x** |
+| `nanmax` | 0.07 | 0.61 | 0.07 | 0.92x | **8.43x** |
+| `nanminmax` | 0.13 | 1.26 | 0.09 | **1.48x** | **14.05x** |
+| `nansum` | 0.30 | 0.63 | 0.19 | **1.60x** | **3.32x** |
+
+### (100, 100, 100), axis=-1
+
+| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `nanmean` | 0.65 | 0.66 | 0.16 | **4.06x** | **4.14x** |
+| `nanaverage` | 3.46 | - | 0.22 | **15.80x** | - |
+| `nanmedian` | 25.28 | 7.47 | 0.48 | **52.40x** | **15.49x** |
+| `nanvar` | 1.65 | 1.61 | 0.26 | **6.26x** | **6.11x** |
+| `nanstd` | 1.65 | 1.63 | 0.28 | **5.86x** | **5.78x** |
+| `nanmin` | 0.10 | 0.66 | 0.09 | **1.15x** | **7.37x** |
+| `nanmax` | 0.10 | 0.61 | 0.09 | **1.12x** | **6.63x** |
+| `nanminmax` | 0.21 | 1.26 | 0.10 | **1.98x** | **12.11x** |
+| `nansum` | 0.41 | 0.66 | 0.15 | **2.64x** | **4.27x** |
+
+### (11, 100, 100), axis=0
+
+| function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---:|---:|---:|---:|---:|
+| `nanmean` | 0.10 | 0.04 | 0.06 | **1.66x** | 0.69x |
+| `nanaverage` | 0.43 | - | 0.08 | **5.63x** | - |
+| `nanmedian` | 1.77 | 0.77 | 0.15 | **11.84x** | **5.13x** |
+| `nanvar` | 0.21 | 0.09 | 0.10 | **1.99x** | 0.91x |
+| `nanstd` | 0.21 | 0.10 | 0.11 | **1.95x** | 0.92x |
+| `nanmin` | 0.01 | 0.04 | 0.01 | **1.18x** | **4.99x** |
 | `nanmax` | 0.01 | 0.04 | 0.01 | **1.17x** | **4.98x** |
-| `nanminmax` | 0.02 | 0.08 | 0.02 | **1.23x** | **5.21x** |
+| `nanminmax` | 0.02 | 0.08 | 0.02 | **1.29x** | **5.48x** |
 | `nansum` | 0.04 | 0.04 | 0.06 | 0.67x | 0.69x |
 
-#### (31, 100, 100), float32
+### (31, 100, 100), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `nanmean` | 0.24 | 0.13 | 0.15 | **1.64x** | 0.89x |
-| `nanaverage` | 1.03 | - | 0.20 | **5.28x** | - |
-| `nanmedian` | 6.48 | 2.63 | 0.32 | **19.95x** | **8.10x** |
-| `nanvar` | 0.52 | 0.36 | 0.09 | **5.97x** | **4.14x** |
-| `nanstd` | 0.52 | 0.35 | 0.10 | **5.44x** | **3.68x** |
-| `nanmin` | 0.02 | 0.13 | 0.02 | **1.09x** | **6.21x** |
-| `nanmax` | 0.02 | 0.12 | 0.02 | **1.10x** | **5.68x** |
-| `nanminmax` | 0.05 | 0.26 | 0.04 | **1.21x** | **6.96x** |
-| `nansum` | 0.10 | 0.13 | 0.15 | 0.67x | 0.90x |
+| `nanmean` | 0.24 | 0.13 | 0.15 | **1.63x** | 0.88x |
+| `nanaverage` | 1.06 | - | 0.20 | **5.29x** | - |
+| `nanmedian` | 6.43 | 2.55 | 0.32 | **19.96x** | **7.92x** |
+| `nanvar` | 0.52 | 0.36 | 0.27 | **1.94x** | **1.33x** |
+| `nanstd` | 0.52 | 0.35 | 0.27 | **1.92x** | **1.27x** |
+| `nanmin` | 0.02 | 0.13 | 0.02 | **1.09x** | **6.18x** |
+| `nanmax` | 0.02 | 0.13 | 0.02 | **1.09x** | **6.21x** |
+| `nanminmax` | 0.05 | 0.26 | 0.04 | **1.20x** | **6.87x** |
+| `nansum` | 0.10 | 0.13 | 0.15 | 0.67x | 0.88x |
 
-#### (11, 512, 512), float32
+### (11, 512, 512), axis=0
 
 | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
 |---|---:|---:|---:|---:|---:|
-| `nanmean` | 2.41 | 1.40 | 0.38 | **6.35x** | **3.71x** |
-| `nanaverage` | 10.86 | - | 1.13 | **9.58x** | - |
-| `nanmedian` | 53.74 | 24.58 | 2.91 | **18.45x** | **8.44x** |
-| `nanvar` | 5.22 | 4.98 | 0.58 | **9.04x** | **8.62x** |
-| `nanstd` | 5.35 | 5.01 | 0.60 | **8.98x** | **8.41x** |
-| `nanmin` | 0.27 | 1.35 | 0.14 | **1.96x** | **9.76x** |
-| `nanmax` | 0.26 | 1.35 | 0.11 | **2.35x** | **11.96x** |
-| `nanminmax` | 0.52 | 2.76 | 0.18 | **2.85x** | **15.18x** |
-| `nansum` | 0.97 | 1.30 | 0.35 | **2.75x** | **3.69x** |
+| `nanmean` | 2.38 | 1.42 | 0.38 | **6.26x** | **3.73x** |
+| `nanaverage` | 10.28 | - | 1.08 | **9.48x** | - |
+| `nanmedian` | 52.74 | 24.55 | 3.00 | **17.61x** | **8.19x** |
+| `nanvar` | 5.13 | 5.38 | 0.60 | **8.61x** | **9.02x** |
+| `nanstd` | 5.26 | 5.47 | 0.60 | **8.69x** | **9.05x** |
+| `nanmin` | 0.27 | 1.38 | 0.12 | **2.34x** | **11.79x** |
+| `nanmax` | 0.27 | 1.38 | 0.11 | **2.34x** | **12.01x** |
+| `nanminmax` | 0.52 | 2.75 | 0.19 | **2.73x** | **14.39x** |
+| `nansum` | 0.95 | 1.34 | 0.41 | **2.34x** | **3.30x** |
 
 :::
-
-## Reading The Axis-0 Rows
-
-Two factors explain most `axis=0` rows:
-
-- **`.shape[0]` drives the order-statistic win.**
-  NumPy's `median` uses partition, but still pays broader axis/output overhead.
-  The difference grows with stack depth for measured order statistics like `median`, `percentile`, and `quantile`.
-- **Output-element size (`prod(*arr.shape[1:])`) matters.**
-  `reducers` parallelizes across output elements. NumPy's cheap strided loops
-  can win on small outputs, but `(11, 512, 512)` has ~26x more outputs than
-  `(11, 100, 100)` and `reducers` wins for most cases.
-- **Some reducers stream along the non-stacking axes.**
-  For `var`, `std`, and `count_finite`, reducers walks each stack level as
-  contiguous memory over the non-stacking axes and updates many output positions
-  at once. For finite-only medians, it skips non-finite values while reading
-  along the stacking axis, so the scratch buffer contains only useful values.
-  In image-stack terms: it scans each stack level over its output positions,
-  rather than repeatedly gathering one output position from every stack level
-  into a tiny temporary list.
-
-Practical rule: for tiny shallow stacks and cheap scans, NumPy/Bottleneck may be
-better. For larger outputs or expensive reducers (`median`, `percentile`,
-`var`/`std`), `reducers` is usually the better path.

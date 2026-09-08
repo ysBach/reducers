@@ -2,26 +2,57 @@
 title: "Sigma-clipping performance"
 ---
 
-Sigma clipping keeps its numerical policy in a small Rust kernel used by both
-the vector and axis-0 stack adapters.
+Recorded **2026-09-08**, reducers **0.4.0 + overflow fix (`eb27fc0`)**.
+[Environment](../performance.qmd#recorded-environment) ·
+[Python CSV](results/2026-09-08/sigma-python.csv) ·
+[Python output](results/2026-09-08/sigma-python.txt)
 
-- Caller-owned `Workspace` stores masks, rejection indices, statistical
-  scratch, and optional restoration flags. `with_capacity` reserves buffers
-  for reuse; inputs remain borrowed.
-- The stack adapter reuses a column buffer and workspace across columns within
-  each Rayon job. It scans sample/mask pairs directly, uses existing
-  axis-order grain blocks, and takes the serial path for one block.
-- Fused mean/median calls clip and reduce each column together. Valid final
-  statistics are reused until the rejection mask changes; final means sum
-  retained `f64` scratch in original order.
-- MAD reuses retained-value scratch, populating it only when needed.
-- Python normalizes dtype/contiguity once and skips matching mask reshapes.
-  Stack work uses the order-statistic Rayon grain.
+## Python API
 
-NaN and infinite samples are excluded. Centers and MAD are narrowed to input
-dtype before threshold tests. Standard-deviation summation order is configured;
-final means use sequential `f64`. MAD is `1.4826` times median absolute
-deviation and ignores `ddof`. Strict `>` rejection preserves equality. Squared
-residuals, limits, and variance sums can overflow; tiny values can underflow.
-Invalid statistics leave masks unchanged; diagnostics report the last valid
-spread.
+Selected median microseconds per call, including Python validation and output
+allocation. These rows use an input mask; the complete output also covers
+unmasked calls, float32, and length 257. Full diagnostics and restoration flags
+are included in the complete output.
+
+| Input (float64) | Estimators | Mask | Fused mean | Fused median |
+|---|---|---:|---:|---:|
+| 31 | mean/std | 1.44 | 1.44 | 1.56 |
+| 31 | median/mad | 1.70 | 1.71 | 1.69 |
+| 4096 | mean/std | 15.70 | 17.41 | 25.57 |
+| 4096 | median/mad | 56.10 | 60.21 | 54.05 |
+| 31x64x64 | mean/std | 258.12 | 134.52 | 144.90 |
+| 31x64x64 | median/mad | 338.05 | 223.68 | 206.08 |
+
+## Method and reproduction
+
+The benchmark uses deterministic data with outliers, NaN/infinities, `sigma=3`,
+`maxiters=5`, `ddof=0`, and no rollback. Mean/std and median/MAD use matching
+rejection and dispersion centers. An independent NumPy reference checks masks,
+fused values, diagnostic fields, and flags before timing.
+Reference computations are excluded from timings.
+
+Use the environment setup above, then run:
+
+```bash
+uv run --no-sync python benchmarks/benchmark_sigma_clip.py --repeats 15 --warmups 3 --inner 100 --csv sigma-python.csv
+```
+
+The script uses the same `_benchutils.timeit` helper as the 1-D and axis
+benchmarks: 100 calls per sample, 3 warmups, and 15 samples, discarding the
+lowest/highest sample before taking the median. These are absolute timings,
+not a comparison with an earlier implementation or a no-regression guarantee.
+The benchmark covers common configurations, not every clipping policy.
+
+## Why it is fast
+
+- A caller-owned Rust `Workspace` reuses masks, indices, and statistical scratch.
+- Stack processing reuses column scratch within each Rayon job; callers of the
+  Rust kernel control parallel scheduling.
+- Fused outputs reuse valid statistics and retained-value scratch when possible.
+- Python normalizes dtype and contiguity once; matching masks avoid extra reshapes.
+
+NaN/infinities are excluded. Threshold equality survives; centers and MAD narrow
+to input dtype. Mean-centered variance uses the unrounded mean; final clipped
+means sum retained values sequentially in float64. Extreme residual squares or
+limits can overflow, and tiny squares can underflow. These timings do not claim
+to improve those numerical limits.

@@ -1,0 +1,235 @@
+# reducers axis benchmark; bottleneck=yes
+# environment
+# - recorded UTC: 2026-09-08T12:27:19+00:00
+# - python: 3.13.11 (CPython)
+# - reducers: 0.4.0
+# - reducers build commit: eb27fc03cfc371cf6adf5e570068703aab1218e4
+# - extension sha256: 1203f0a2a77ca6325bb47a541869d8432eb7686f5fc7ef6d5d48732e2fbcdb94
+# - numpy: 2.4.6
+# - bottleneck: 1.6.0
+# - os: macOS-26.6-arm64-arm-64bit-Mach-O
+# - kernel: Darwin 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:27 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6041
+# - machine: arm64
+# - command: benchmarks/benchmark_axis.py --repeats 15 --warmups 3
+# - processor: arm
+# - reducers threads: 14
+# - REDUCERS_AXIS_SCAN_PLAIN_GRAIN: 262144
+# - REDUCERS_AXIS_SCAN_NAN_GRAIN: 262144
+# - REDUCERS_AXIS_SCAN_VAR_GRAIN: 262144
+# - REDUCERS_AXIS_WEIGHTED_GRAIN: 262144
+# - REDUCERS_AXIS_ORDER_MEDIAN_GRAIN: 1024
+# - REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN: 1024
+# - REDUCERS_MINMAX_1D_GRAIN: 65536
+# - OMP_NUM_THREADS: 1
+# - OPENBLAS_NUM_THREADS: 1
+# - MKL_NUM_THREADS: 1
+# - VECLIB_MAXIMUM_THREADS: 1
+
+## Plain finite-data
+| case | shape | axis | dtype | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---|---:|---|---|---:|---:|---:|---:|---:|
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `mean` | 0.16 | - | 0.10 | **1.57x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `average` | 0.28 | - | 0.38 | 0.74x | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `median` | 8.68 | 7.77 | 0.66 | **13.24x** | **11.84x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `var` | 0.61 | - | 0.17 | **3.53x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `std` | 0.61 | - | 0.17 | **3.66x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `min` | 0.17 | - | 0.11 | **1.53x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `max` | 0.17 | - | 0.13 | **1.30x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `minmax` | 0.34 | - | 0.14 | **2.51x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `sum` | 0.15 | - | 0.10 | **1.56x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `percentile` | 14.30 | - | 1.70 | **8.43x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `quantile` | 14.21 | - | 1.64 | **8.65x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `mean` | 0.18 | - | 0.07 | **2.49x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `average` | 0.48 | - | 0.15 | **3.24x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `median` | 8.36 | 7.43 | 0.62 | **13.49x** | **11.99x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `var` | 0.69 | - | 0.19 | **3.55x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `std` | 0.70 | - | 0.20 | **3.55x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `min` | 0.12 | - | 0.15 | 0.81x | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `max` | 0.12 | - | 0.15 | 0.80x | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `minmax` | 0.26 | - | 0.19 | **1.36x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `sum` | 0.17 | - | 0.07 | **2.41x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `percentile` | 13.65 | - | 1.55 | **8.79x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `quantile` | 13.83 | - | 1.57 | **8.80x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `mean` | 0.02 | - | 0.02 | 0.91x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `average` | 0.04 | - | 0.06 | 0.78x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `median` | 0.84 | 0.64 | 0.23 | **3.69x** | **2.82x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `var` | 0.07 | - | 0.07 | **0.99x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `std` | 0.08 | - | 0.08 | **1.00x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `min` | 0.02 | - | 0.03 | 0.77x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `max` | 0.02 | - | 0.03 | 0.77x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `minmax` | 0.04 | - | 0.04 | **1.00x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `sum` | 0.02 | - | 0.03 | 0.84x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `percentile` | 1.26 | - | 0.61 | **2.05x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `quantile` | 1.23 | - | 0.63 | **1.97x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `mean` | 0.06 | - | 0.06 | **0.99x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `average` | 0.10 | - | 0.14 | 0.77x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `median` | 2.99 | 2.42 | 0.31 | **9.50x** | **7.69x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `var` | 0.19 | - | 0.17 | **1.11x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `std` | 0.20 | - | 0.17 | **1.13x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `min` | 0.05 | - | 0.06 | 0.84x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `max` | 0.05 | - | 0.06 | 0.84x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `minmax` | 0.11 | - | 0.10 | **1.08x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `sum` | 0.05 | - | 0.06 | 0.82x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `percentile` | 4.99 | - | 0.83 | **6.03x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `quantile` | 4.96 | - | 0.83 | **5.95x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `mean` | 0.52 | - | 0.24 | **2.20x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `average` | 0.89 | - | 0.90 | **0.99x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `median` | 29.77 | 23.44 | 3.29 | **9.06x** | **7.13x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `var` | 1.97 | - | 0.44 | **4.44x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `std` | 1.97 | - | 0.45 | **4.37x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `min` | 0.51 | - | 0.21 | **2.42x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `max` | 0.49 | - | 0.24 | **2.06x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `minmax` | 0.99 | - | 0.34 | **2.91x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `sum` | 0.54 | - | 0.23 | **2.38x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `percentile` | 35.83 | - | 10.26 | **3.49x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `quantile` | 35.90 | - | 10.12 | **3.55x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `mean` | 0.07 | - | 0.08 | 0.87x | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `average` | 0.13 | - | 0.34 | 0.39x | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `median` | 8.79 | 7.88 | 0.67 | **13.20x** | **11.82x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `var` | 0.25 | - | 0.15 | **1.66x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `std` | 0.26 | - | 0.15 | **1.74x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `min` | 0.07 | - | 0.09 | 0.73x | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `max` | 0.06 | - | 0.09 | 0.71x | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `minmax` | 0.13 | - | 0.11 | **1.21x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `sum` | 0.06 | - | 0.10 | 0.60x | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `percentile` | 14.54 | - | 1.77 | **8.21x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `quantile` | 15.01 | - | 1.72 | **8.73x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `mean` | 0.17 | - | 0.10 | **1.66x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `average` | 0.31 | - | 0.20 | **1.60x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `median` | 8.25 | 7.67 | 0.65 | **12.76x** | **11.86x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `var` | 0.52 | - | 0.23 | **2.23x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `std` | 0.52 | - | 0.25 | **2.09x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `min` | 0.10 | - | 0.10 | **1.01x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `max` | 0.11 | - | 0.10 | **1.04x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `minmax` | 0.20 | - | 0.12 | **1.67x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `sum` | 0.17 | - | 0.11 | **1.54x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `percentile` | 13.97 | - | 1.60 | **8.75x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `quantile` | 13.77 | - | 1.64 | **8.37x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `mean` | 0.01 | - | 0.02 | 0.79x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `average` | 0.02 | - | 0.05 | 0.46x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `median` | 0.89 | 0.72 | 0.19 | **4.74x** | **3.79x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `var` | 0.04 | - | 0.06 | 0.67x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `std` | 0.04 | - | 0.07 | 0.65x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `min` | 0.01 | - | 0.01 | 0.64x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `max` | 0.01 | - | 0.01 | 0.63x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `minmax` | 0.02 | - | 0.02 | 0.89x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `sum` | 0.01 | - | 0.02 | 0.57x | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `percentile` | 1.25 | - | 0.59 | **2.12x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `quantile` | 1.25 | - | 0.60 | **2.06x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `mean` | 0.03 | - | 0.04 | 0.72x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `average` | 0.05 | - | 0.13 | 0.40x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `median` | 3.02 | 2.59 | 0.28 | **10.94x** | **9.41x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `var` | 0.09 | - | 0.15 | 0.60x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `std` | 0.09 | - | 0.18 | 0.53x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `min` | 0.02 | - | 0.03 | 0.80x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `max` | 0.02 | - | 0.03 | 0.65x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `minmax` | 0.04 | - | 0.05 | 0.92x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `sum` | 0.02 | - | 0.04 | 0.60x | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `percentile` | 5.15 | - | 0.74 | **6.93x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `quantile` | 5.08 | - | 0.74 | **6.84x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `mean` | 0.37 | - | 0.20 | **1.85x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `average` | 0.44 | - | 0.87 | 0.50x | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `median` | 29.52 | 23.52 | 2.30 | **12.85x** | **10.24x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `var` | 1.17 | - | 0.37 | **3.12x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `std` | 1.15 | - | 0.39 | **2.92x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `min` | 0.25 | - | 0.15 | **1.65x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `max` | 0.25 | - | 0.14 | **1.70x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `minmax` | 0.48 | - | 0.20 | **2.37x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `sum` | 0.27 | - | 0.17 | **1.62x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `percentile` | 36.05 | - | 13.33 | **2.70x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `quantile` | 35.99 | - | 13.45 | **2.68x** | - |
+
+## NaN-aware
+| case | shape | axis | dtype | function | np (ms) | bn (ms) | rd (ms) | np/rd | bn/rd |
+|---|---|---:|---|---|---:|---:|---:|---:|---:|
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanmean` | 0.94 | 0.73 | 0.17 | **5.37x** | **4.18x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanaverage` | 3.70 | - | 0.45 | **8.31x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanmedian` | 28.10 | 7.50 | 0.47 | **59.39x** | **15.85x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanvar` | 2.10 | 1.66 | 0.27 | **7.74x** | **6.12x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanstd` | 2.10 | 1.69 | 0.28 | **7.54x** | **6.05x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanmin` | 0.17 | 0.65 | 0.09 | **1.88x** | **7.12x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanmax` | 0.17 | 0.66 | 0.09 | **1.84x** | **6.99x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nanminmax` | 0.35 | 1.33 | 0.13 | **2.61x** | **9.98x** |
+| cube_axis0 | (100, 100, 100) | 0 | float64 | `nansum` | 0.49 | 0.64 | 0.19 | **2.63x** | **3.40x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanmean` | 0.71 | 0.66 | 0.15 | **4.70x** | **4.39x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanaverage` | 3.95 | - | 0.16 | **25.07x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanmedian` | 25.48 | 8.04 | 0.96 | **26.48x** | **8.35x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanvar` | 1.96 | 1.62 | 0.32 | **6.12x** | **5.06x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanstd` | 1.95 | 1.65 | 0.32 | **6.02x** | **5.08x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanmin` | 0.12 | 0.64 | 0.12 | **1.06x** | **5.50x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanmax` | 0.13 | 0.64 | 0.12 | **1.05x** | **5.27x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nanminmax` | 0.25 | 1.32 | 0.17 | **1.50x** | **7.87x** |
+| cube_axislast | (100, 100, 100) | -1 | float64 | `nansum` | 0.50 | 0.63 | 0.15 | **3.38x** | **4.26x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanmean` | 0.12 | 0.03 | 0.05 | **2.11x** | 0.62x |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanaverage` | 0.49 | - | 0.08 | **6.30x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanmedian` | 1.80 | 0.71 | 0.20 | **8.99x** | **3.55x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanvar` | 0.25 | 0.09 | 0.10 | **2.46x** | 0.92x |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanstd` | 0.26 | 0.10 | 0.10 | **2.50x** | **0.98x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanmin` | 0.02 | 0.04 | 0.02 | **1.05x** | **2.08x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanmax` | 0.02 | 0.04 | 0.02 | **1.04x** | **2.07x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nanminmax` | 0.04 | 0.08 | 0.03 | **1.24x** | **2.45x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float64 | `nansum` | 0.06 | 0.04 | 0.05 | **1.09x** | 0.72x |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanmean` | 0.29 | 0.14 | 0.14 | **2.14x** | **0.99x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanaverage` | 1.18 | - | 0.20 | **5.88x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanmedian` | 6.48 | 2.56 | 0.31 | **20.56x** | **8.14x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanvar` | 0.66 | 0.37 | 0.25 | **2.62x** | **1.45x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanstd` | 0.67 | 0.38 | 0.25 | **2.63x** | **1.48x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanmin` | 0.06 | 0.13 | 0.05 | **1.03x** | **2.43x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanmax` | 0.06 | 0.13 | 0.05 | **1.02x** | **2.43x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nanminmax` | 0.11 | 0.26 | 0.09 | **1.22x** | **2.91x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float64 | `nansum` | 0.16 | 0.13 | 0.13 | **1.16x** | **0.98x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanmean` | 2.92 | 1.45 | 0.39 | **7.49x** | **3.72x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanaverage` | 11.75 | - | 1.09 | **10.77x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanmedian` | 57.99 | 24.46 | 2.93 | **19.78x** | **8.34x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanvar` | 6.45 | 5.43 | 0.59 | **10.96x** | **9.23x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanstd` | 6.78 | 5.13 | 0.64 | **10.61x** | **8.03x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanmin` | 0.51 | 1.37 | 0.18 | **2.78x** | **7.52x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanmax` | 0.52 | 1.39 | 0.20 | **2.55x** | **6.78x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nanminmax` | 0.98 | 2.76 | 0.67 | **1.47x** | **4.14x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float64 | `nansum` | 1.53 | 1.34 | 0.38 | **4.09x** | **3.57x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanmean` | 0.74 | 0.69 | 0.19 | **3.86x** | **3.63x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanaverage` | 3.11 | - | 0.48 | **6.47x** | - |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanmedian` | 26.48 | 7.41 | 0.47 | **56.54x** | **15.81x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanvar` | 1.61 | 1.62 | 0.30 | **5.38x** | **5.39x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanstd` | 1.63 | 1.64 | 0.30 | **5.38x** | **5.39x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanmin` | 0.06 | 0.63 | 0.07 | 0.93x | **9.08x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanmax` | 0.07 | 0.61 | 0.07 | 0.92x | **8.43x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nanminmax` | 0.13 | 1.26 | 0.09 | **1.48x** | **14.05x** |
+| cube_axis0 | (100, 100, 100) | 0 | float32 | `nansum` | 0.30 | 0.63 | 0.19 | **1.60x** | **3.32x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanmean` | 0.65 | 0.66 | 0.16 | **4.06x** | **4.14x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanaverage` | 3.46 | - | 0.22 | **15.80x** | - |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanmedian` | 25.28 | 7.47 | 0.48 | **52.40x** | **15.49x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanvar` | 1.65 | 1.61 | 0.26 | **6.26x** | **6.11x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanstd` | 1.65 | 1.63 | 0.28 | **5.86x** | **5.78x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanmin` | 0.10 | 0.66 | 0.09 | **1.15x** | **7.37x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanmax` | 0.10 | 0.61 | 0.09 | **1.12x** | **6.63x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nanminmax` | 0.21 | 1.26 | 0.10 | **1.98x** | **12.11x** |
+| cube_axislast | (100, 100, 100) | -1 | float32 | `nansum` | 0.41 | 0.66 | 0.15 | **2.64x** | **4.27x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanmean` | 0.10 | 0.04 | 0.06 | **1.66x** | 0.69x |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanaverage` | 0.43 | - | 0.08 | **5.63x** | - |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanmedian` | 1.77 | 0.77 | 0.15 | **11.84x** | **5.13x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanvar` | 0.21 | 0.09 | 0.10 | **1.99x** | 0.91x |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanstd` | 0.21 | 0.10 | 0.11 | **1.95x** | 0.92x |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanmin` | 0.01 | 0.04 | 0.01 | **1.18x** | **4.99x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanmax` | 0.01 | 0.04 | 0.01 | **1.17x** | **4.98x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nanminmax` | 0.02 | 0.08 | 0.02 | **1.29x** | **5.48x** |
+| stack11_axis0 | (11, 100, 100) | 0 | float32 | `nansum` | 0.04 | 0.04 | 0.06 | 0.67x | 0.69x |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanmean` | 0.24 | 0.13 | 0.15 | **1.63x** | 0.88x |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanaverage` | 1.06 | - | 0.20 | **5.29x** | - |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanmedian` | 6.43 | 2.55 | 0.32 | **19.96x** | **7.92x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanvar` | 0.52 | 0.36 | 0.27 | **1.94x** | **1.33x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanstd` | 0.52 | 0.35 | 0.27 | **1.92x** | **1.27x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanmin` | 0.02 | 0.13 | 0.02 | **1.09x** | **6.18x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanmax` | 0.02 | 0.13 | 0.02 | **1.09x** | **6.21x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nanminmax` | 0.05 | 0.26 | 0.04 | **1.20x** | **6.87x** |
+| stack31_axis0 | (31, 100, 100) | 0 | float32 | `nansum` | 0.10 | 0.13 | 0.15 | 0.67x | 0.88x |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanmean` | 2.38 | 1.42 | 0.38 | **6.26x** | **3.73x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanaverage` | 10.28 | - | 1.08 | **9.48x** | - |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanmedian` | 52.74 | 24.55 | 3.00 | **17.61x** | **8.19x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanvar` | 5.13 | 5.38 | 0.60 | **8.61x** | **9.02x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanstd` | 5.26 | 5.47 | 0.60 | **8.69x** | **9.05x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanmin` | 0.27 | 1.38 | 0.12 | **2.34x** | **11.79x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanmax` | 0.27 | 1.38 | 0.11 | **2.34x** | **12.01x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nanminmax` | 0.52 | 2.75 | 0.19 | **2.73x** | **14.39x** |
+| stack11_big_axis0 | (11, 512, 512) | 0 | float32 | `nansum` | 0.95 | 1.34 | 0.41 | **2.34x** | **3.30x** |
+

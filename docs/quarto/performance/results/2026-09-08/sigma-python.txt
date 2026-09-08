@@ -1,0 +1,165 @@
+# contract: sigma=3,maxiters=5,ddof=0,nkeep=0,revert_on_nkeep=False
+# reference: independent NumPy finite-only cumulative mean/std or median/MAD
+# recorded UTC: 2026-09-08T12:54:34+00:00
+# python: 3.13.11 (CPython)
+# reducers: 0.4.0
+# reducers build commit: eb27fc03cfc371cf6adf5e570068703aab1218e4
+# extension sha256: 1203f0a2a77ca6325bb47a541869d8432eb7686f5fc7ef6d5d48732e2fbcdb94
+# numpy: 2.4.6
+# bottleneck: 1.6.0
+# os: macOS-26.6-arm64-arm-64bit-Mach-O
+# kernel: Darwin 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:27 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6041
+# machine: arm64
+# command: benchmarks/benchmark_sigma_clip.py --repeats 15 --warmups 3 --inner 100 --csv /tmp/reducers-benchmark-refresh/sigma-python-shared.csv
+# processor: arm
+# reducers threads: 14
+# REDUCERS_AXIS_SCAN_PLAIN_GRAIN: 262144
+# REDUCERS_AXIS_SCAN_NAN_GRAIN: 262144
+# REDUCERS_AXIS_SCAN_VAR_GRAIN: 262144
+# REDUCERS_AXIS_WEIGHTED_GRAIN: 262144
+# REDUCERS_AXIS_ORDER_MEDIAN_GRAIN: 1024
+# REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN: 1024
+# REDUCERS_MINMAX_1D_GRAIN: 65536
+# OMP_NUM_THREADS: 1
+# OPENBLAS_NUM_THREADS: 1
+# MKL_NUM_THREADS: 1
+# VECLIB_MAXIMUM_THREADS: 1
+| layout | shape | dtype | profile | input mask | operation | median ms |
+|---|---|---|---|---:|---|---:|
+| vector | 31 | float32 | mean_std | false | `full` | 0.002570 |
+| vector | 31 | float32 | mean_std | false | `mask` | 0.001245 |
+| vector | 31 | float32 | mean_std | false | `fused_mean` | 0.001272 |
+| vector | 31 | float32 | mean_std | false | `fused_median` | 0.001373 |
+| vector | 31 | float32 | mean_std | true | `full` | 0.002829 |
+| vector | 31 | float32 | mean_std | true | `mask` | 0.001375 |
+| vector | 31 | float32 | mean_std | true | `fused_mean` | 0.001392 |
+| vector | 31 | float32 | mean_std | true | `fused_median` | 0.001442 |
+| vector | 31 | float32 | median_mad | false | `full` | 0.002991 |
+| vector | 31 | float32 | median_mad | false | `mask` | 0.001638 |
+| vector | 31 | float32 | median_mad | false | `fused_mean` | 0.001661 |
+| vector | 31 | float32 | median_mad | false | `fused_median` | 0.001650 |
+| vector | 31 | float32 | median_mad | true | `full` | 0.002940 |
+| vector | 31 | float32 | median_mad | true | `mask` | 0.001602 |
+| vector | 31 | float32 | median_mad | true | `fused_mean` | 0.001625 |
+| vector | 31 | float32 | median_mad | true | `fused_median` | 0.001623 |
+| vector | 257 | float32 | mean_std | false | `full` | 0.004168 |
+| vector | 257 | float32 | mean_std | false | `mask` | 0.001895 |
+| vector | 257 | float32 | mean_std | false | `fused_mean` | 0.002240 |
+| vector | 257 | float32 | mean_std | false | `fused_median` | 0.002740 |
+| vector | 257 | float32 | mean_std | true | `full` | 0.004147 |
+| vector | 257 | float32 | mean_std | true | `mask` | 0.002079 |
+| vector | 257 | float32 | mean_std | true | `fused_mean` | 0.002262 |
+| vector | 257 | float32 | mean_std | true | `fused_median` | 0.002418 |
+| vector | 257 | float32 | median_mad | false | `full` | 0.006806 |
+| vector | 257 | float32 | median_mad | false | `mask` | 0.004785 |
+| vector | 257 | float32 | median_mad | false | `fused_mean` | 0.005140 |
+| vector | 257 | float32 | median_mad | false | `fused_median` | 0.004970 |
+| vector | 257 | float32 | median_mad | true | `full` | 0.005470 |
+| vector | 257 | float32 | median_mad | true | `mask` | 0.003334 |
+| vector | 257 | float32 | median_mad | true | `fused_mean` | 0.003615 |
+| vector | 257 | float32 | median_mad | true | `fused_median` | 0.003338 |
+| vector | 4096 | float32 | mean_std | false | `full` | 0.031554 |
+| vector | 4096 | float32 | mean_std | false | `mask` | 0.015752 |
+| vector | 4096 | float32 | mean_std | false | `fused_mean` | 0.018061 |
+| vector | 4096 | float32 | mean_std | false | `fused_median` | 0.019391 |
+| vector | 4096 | float32 | mean_std | true | `full` | 0.031138 |
+| vector | 4096 | float32 | mean_std | true | `mask` | 0.014984 |
+| vector | 4096 | float32 | mean_std | true | `fused_mean` | 0.016918 |
+| vector | 4096 | float32 | mean_std | true | `fused_median` | 0.024601 |
+| vector | 4096 | float32 | median_mad | false | `full` | 0.043032 |
+| vector | 4096 | float32 | median_mad | false | `mask` | 0.027035 |
+| vector | 4096 | float32 | median_mad | false | `fused_mean` | 0.031433 |
+| vector | 4096 | float32 | median_mad | false | `fused_median` | 0.026854 |
+| vector | 4096 | float32 | median_mad | true | `full` | 0.069647 |
+| vector | 4096 | float32 | median_mad | true | `mask` | 0.053580 |
+| vector | 4096 | float32 | median_mad | true | `fused_mean` | 0.056115 |
+| vector | 4096 | float32 | median_mad | true | `fused_median` | 0.053364 |
+| stack | 31x64x64 | float32 | mean_std | false | `full` | 0.278480 |
+| stack | 31x64x64 | float32 | mean_std | false | `mask` | 0.244177 |
+| stack | 31x64x64 | float32 | mean_std | false | `restored_flags` | 0.276897 |
+| stack | 31x64x64 | float32 | mean_std | false | `fused_mean` | 0.128969 |
+| stack | 31x64x64 | float32 | mean_std | false | `fused_median` | 0.149463 |
+| stack | 31x64x64 | float32 | mean_std | true | `full` | 0.300640 |
+| stack | 31x64x64 | float32 | mean_std | true | `mask` | 0.254704 |
+| stack | 31x64x64 | float32 | mean_std | true | `restored_flags` | 0.285023 |
+| stack | 31x64x64 | float32 | mean_std | true | `fused_mean` | 0.135028 |
+| stack | 31x64x64 | float32 | mean_std | true | `fused_median` | 0.132381 |
+| stack | 31x64x64 | float32 | median_mad | false | `full` | 0.445248 |
+| stack | 31x64x64 | float32 | median_mad | false | `mask` | 0.401810 |
+| stack | 31x64x64 | float32 | median_mad | false | `restored_flags` | 0.433491 |
+| stack | 31x64x64 | float32 | median_mad | false | `fused_mean` | 0.317420 |
+| stack | 31x64x64 | float32 | median_mad | false | `fused_median` | 0.297270 |
+| stack | 31x64x64 | float32 | median_mad | true | `full` | 0.373398 |
+| stack | 31x64x64 | float32 | median_mad | true | `mask` | 0.333810 |
+| stack | 31x64x64 | float32 | median_mad | true | `restored_flags` | 0.365803 |
+| stack | 31x64x64 | float32 | median_mad | true | `fused_mean` | 0.218289 |
+| stack | 31x64x64 | float32 | median_mad | true | `fused_median` | 0.208471 |
+| vector | 31 | float64 | mean_std | false | `full` | 0.002700 |
+| vector | 31 | float64 | mean_std | false | `mask` | 0.001345 |
+| vector | 31 | float64 | mean_std | false | `fused_mean` | 0.001336 |
+| vector | 31 | float64 | mean_std | false | `fused_median` | 0.001410 |
+| vector | 31 | float64 | mean_std | true | `full` | 0.002815 |
+| vector | 31 | float64 | mean_std | true | `mask` | 0.001442 |
+| vector | 31 | float64 | mean_std | true | `fused_mean` | 0.001442 |
+| vector | 31 | float64 | mean_std | true | `fused_median` | 0.001560 |
+| vector | 31 | float64 | median_mad | false | `full` | 0.003147 |
+| vector | 31 | float64 | median_mad | false | `mask` | 0.001765 |
+| vector | 31 | float64 | median_mad | false | `fused_mean` | 0.001798 |
+| vector | 31 | float64 | median_mad | false | `fused_median` | 0.001764 |
+| vector | 31 | float64 | median_mad | true | `full` | 0.003089 |
+| vector | 31 | float64 | median_mad | true | `mask` | 0.001703 |
+| vector | 31 | float64 | median_mad | true | `fused_mean` | 0.001713 |
+| vector | 31 | float64 | median_mad | true | `fused_median` | 0.001689 |
+| vector | 257 | float64 | mean_std | false | `full` | 0.004377 |
+| vector | 257 | float64 | mean_std | false | `mask` | 0.002131 |
+| vector | 257 | float64 | mean_std | false | `fused_mean` | 0.002258 |
+| vector | 257 | float64 | mean_std | false | `fused_median` | 0.002962 |
+| vector | 257 | float64 | mean_std | true | `full` | 0.004533 |
+| vector | 257 | float64 | mean_std | true | `mask` | 0.002260 |
+| vector | 257 | float64 | mean_std | true | `fused_mean` | 0.002391 |
+| vector | 257 | float64 | mean_std | true | `fused_median` | 0.002546 |
+| vector | 257 | float64 | median_mad | false | `full` | 0.007439 |
+| vector | 257 | float64 | median_mad | false | `mask` | 0.005168 |
+| vector | 257 | float64 | median_mad | false | `fused_mean` | 0.005372 |
+| vector | 257 | float64 | median_mad | false | `fused_median` | 0.005138 |
+| vector | 257 | float64 | median_mad | true | `full` | 0.005615 |
+| vector | 257 | float64 | median_mad | true | `mask` | 0.003375 |
+| vector | 257 | float64 | median_mad | true | `fused_mean` | 0.003689 |
+| vector | 257 | float64 | median_mad | true | `fused_median` | 0.003374 |
+| vector | 4096 | float64 | mean_std | false | `full` | 0.032048 |
+| vector | 4096 | float64 | mean_std | false | `mask` | 0.015063 |
+| vector | 4096 | float64 | mean_std | false | `fused_mean` | 0.016489 |
+| vector | 4096 | float64 | mean_std | false | `fused_median` | 0.017769 |
+| vector | 4096 | float64 | mean_std | true | `full` | 0.032733 |
+| vector | 4096 | float64 | mean_std | true | `mask` | 0.015702 |
+| vector | 4096 | float64 | mean_std | true | `fused_mean` | 0.017407 |
+| vector | 4096 | float64 | mean_std | true | `fused_median` | 0.025574 |
+| vector | 4096 | float64 | median_mad | false | `full` | 0.043702 |
+| vector | 4096 | float64 | median_mad | false | `mask` | 0.026831 |
+| vector | 4096 | float64 | median_mad | false | `fused_mean` | 0.031973 |
+| vector | 4096 | float64 | median_mad | false | `fused_median` | 0.026812 |
+| vector | 4096 | float64 | median_mad | true | `full` | 0.071875 |
+| vector | 4096 | float64 | median_mad | true | `mask` | 0.056102 |
+| vector | 4096 | float64 | median_mad | true | `fused_mean` | 0.060207 |
+| vector | 4096 | float64 | median_mad | true | `fused_median` | 0.054047 |
+| stack | 31x64x64 | float64 | mean_std | false | `full` | 0.280976 |
+| stack | 31x64x64 | float64 | mean_std | false | `mask` | 0.241038 |
+| stack | 31x64x64 | float64 | mean_std | false | `restored_flags` | 0.272534 |
+| stack | 31x64x64 | float64 | mean_std | false | `fused_mean` | 0.127033 |
+| stack | 31x64x64 | float64 | mean_std | false | `fused_median` | 0.155339 |
+| stack | 31x64x64 | float64 | mean_std | true | `full` | 0.301087 |
+| stack | 31x64x64 | float64 | mean_std | true | `mask` | 0.258118 |
+| stack | 31x64x64 | float64 | mean_std | true | `restored_flags` | 0.282748 |
+| stack | 31x64x64 | float64 | mean_std | true | `fused_mean` | 0.134515 |
+| stack | 31x64x64 | float64 | mean_std | true | `fused_median` | 0.144900 |
+| stack | 31x64x64 | float64 | median_mad | false | `full` | 0.440071 |
+| stack | 31x64x64 | float64 | median_mad | false | `mask` | 0.400119 |
+| stack | 31x64x64 | float64 | median_mad | false | `restored_flags` | 0.428398 |
+| stack | 31x64x64 | float64 | median_mad | false | `fused_mean` | 0.277598 |
+| stack | 31x64x64 | float64 | median_mad | false | `fused_median` | 0.272793 |
+| stack | 31x64x64 | float64 | median_mad | true | `full` | 0.374693 |
+| stack | 31x64x64 | float64 | median_mad | true | `mask` | 0.338049 |
+| stack | 31x64x64 | float64 | median_mad | true | `restored_flags` | 0.368925 |
+| stack | 31x64x64 | float64 | median_mad | true | `fused_mean` | 0.223675 |
+| stack | 31x64x64 | float64 | median_mad | true | `fused_median` | 0.206080 |
+# wrote /tmp/reducers-benchmark-refresh/sigma-python-shared.csv

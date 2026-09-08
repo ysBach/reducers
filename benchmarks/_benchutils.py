@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import gc
+import hashlib
+import os
 import platform
 import statistics
 import sys
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
 from importlib import metadata
+from pathlib import Path
 
 import numpy as np
 import reducers as rd
@@ -36,14 +40,20 @@ def environment_lines(*, bottleneck_available: bool) -> list[str]:
     """Return reproducibility metadata lines for benchmark output."""
     uname = platform.uname()
     lines = [
+        f"recorded UTC: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
         f"python: {sys.version.split()[0]} ({platform.python_implementation()})",
-        f"reducers: {package_version('reducers')}",
+        f"reducers: {rd.__version__}",
+        "reducers build commit: "
+        + os.environ.get("REDUCERS_BENCH_BUILD_COMMIT", "unknown"),
+        "extension sha256: "
+        + hashlib.sha256(Path(rd._core.__file__).read_bytes()).hexdigest(),
         f"numpy: {package_version('numpy')}",
         "bottleneck: "
         + (package_version("bottleneck") if bottleneck_available else "not installed"),
         f"os: {platform.platform()}",
         f"kernel: {uname.system} {uname.release} {uname.version}",
         f"machine: {uname.machine}",
+        f"command: {' '.join(sys.argv)}",
     ]
     processor = uname.processor or platform.processor()
     if processor:
@@ -56,6 +66,13 @@ def environment_lines(*, bottleneck_available: bool) -> list[str]:
     grains = rd.get_parallel_grains()
     for key, env_name in GRAIN_ENV_NAMES.items():
         lines.append(f"{env_name}: {grains[key]}")
+    for name in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        lines.append(f"{name}: {os.environ.get(name, 'unset')}")
     return lines
 
 
@@ -105,6 +122,36 @@ def assert_equivalent(got: object, expected: object, *, dtype: str, label: str) 
         equal_nan=True,
         err_msg=label,
     )
+
+
+def validate_optional(
+    func: Callable[[], object],
+    expected: object,
+    *,
+    dtype: str,
+    label: str,
+    name: str,
+) -> bool:
+    """Validate an optional competitor and report an invalid result.
+
+    The reducers result remains checked with :func:`assert_equivalent` by each
+    benchmark. Optional competitors such as Bottleneck are excluded from the
+    timed set when they raise or disagree with NumPy, so an invalid result is
+    shown as ``n/a`` instead of producing a misleading timing.
+    """
+    try:
+        assert_equivalent(func(), expected, dtype=dtype, label=f"{name} {label}")
+    except (
+        AssertionError,
+        FloatingPointError,
+        OverflowError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        reason = " ".join(str(exc).split()) or repr(exc)
+        print(f"excluding {name} for {label}: {reason}", file=sys.stderr)
+        return False
+    return True
 
 
 def trimmed_median(samples: list[float]) -> float:

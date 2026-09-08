@@ -2,60 +2,73 @@
 title: "Performance"
 ---
 
-`reducers` is built for fast reductions over NumPy arrays.
+Local measurements of the Python API using the scripts in `benchmarks/`.
 
-## Short Version
+## Results
 
-| workload | local result |
+| Measurement | Coverage |
 |---|---|
-| Small (≲ 100) 1-D arrays | Faster than NumPy for most cases, but Bottleneck can still win for `nan*` cases and small `median`. |
-| Plain `axis=0` scans (`mean` / `sum` / `min` / `max`) on shallow, small-output stacks | Mixed: often near NumPy, sometimes slower. See Parallel Threads for the crossover. |
-| NaN-aware `axis=0` `nanmean` / `nanaverage` / `nansum` / `nanvar` on stacks | Faster than NumPy for most cases; also faster than Bottleneck except the shallowest stacks. |
-| Axis-0 stack medians and `[nan]var` / `std` on larger outputs | Usually much faster locally, because these paths avoid building one temporary slice per output pixel. |
-| all other cases (order statistics, larger arrays, `axis=-1`) | `reducers` is usually much faster than NumPy and Bottleneck locally. |
+| [1-D arrays](performance/array-1d-benchmarks.qmd) | 11 reducers and their NaN-aware forms, lengths 30–10 million, float32/float64. |
+| [Axis reductions](performance/axis-benchmarks.qmd) | Five layouts, including shallow stacks and contiguous last-axis reductions. |
+| [Sigma clipping](performance/sigma-clipping.qmd) | Mask, diagnostic, and fused outputs for vectors and axis-0 stacks. |
 
-* NumPy functions such as `mean` and `sum` are extremely optimized and fast
-  when the workload is tiny, so `reducers` does not try to force parallelism for
-  shallow, small-output stacks.
-* However, `reducers` is much faster than NumPy and Bottleneck for larger arrays, NaN-aware reductions (`nan*` functions), and especially for larger stacks.
-* `std` and `var` are common bottlenecks in data processing pipelines. Axis-0 variance and standard deviation stream contiguous chunks from each stack level directly, while still using the stable two-pass formula described below.
-  * For some use cases, `return_mean` can even skip additional call of `mean` and save computation time.
-* Weighted `sum` and `nansum` follow the same idea: `return_sum_weights=True` and `return_unweighted_sum=True` expose values already accumulated by the fused weighted scan, avoiding separate passes when those totals are needed together.
+Performance depends on operation, dtype, layout, and thread settings. NumPy
+and Bottleneck can win individual cases; the tables retain those results.
+Implementation details are in [How It Gets Fast](performance/max-performance.qmd).
 
 ## How To Read The Numbers
 
 Benchmark ratios are reported as `np/rd` and `bn/rd`; values above `1` mean
 `reducers` is faster.
 
-The benchmark scripts check correctness before timing each `reducers` row. They
-compare against NumPy or masked NumPy with `np.testing.assert_allclose(...,
-equal_nan=True)`, using tight tolerances for `float64` and tolerances suitable
-for `float32`. If that check fails, the script stops instead of printing a
-speed number.
+The 1-D and axis scripts check reducers against NumPy before timing
+(`rtol=1e-12, atol=1e-10` for float64; `rtol=1e-6, atol=1e-5` for float32;
+matching NaNs accepted). A reducers mismatch stops the run. Bottleneck is
+optional: results that fail the same check are excluded and labelled `n/a`.
+Missing implementations use `-`. Sigma-clipping checks are described on its
+own page.
 
-The tables are recorded local runs from the environment below. They are useful
-for the shape of the performance story, but exact timings should be regenerated
-on the target machine when a small difference matters.
+These are local timings, not a guarantee across machines or a controlled
+comparison against an earlier release. Rerun on the target machine when a
+small difference matters.
 
 ## Recorded Environment
 
-The benchmark tables in these docs were generated on 2026-09-06 with:
+Recorded **2026-09-08** from **`eb27fc0`**: v0.4.0 plus the subsequent overflow
+fix, built with `maturin develop --release --locked --offline`. The package
+version still reports `0.4.0`; these are current-checkout results, not
+measurements of the published v0.4.0 wheel.
 
-```txt
-python: 3.13.11 (CPython)
-reducers: 0.3.2
-numpy: 2.4.6
-bottleneck: 1.6.0
-os: macOS-26.6-arm64-arm-64bit-Mach-O
-kernel: Darwin 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:27 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6041
-machine: arm64
-processor: arm
-reducers threads: 14
-REDUCERS_AXIS_SCAN_PLAIN_GRAIN=262144
-REDUCERS_AXIS_SCAN_NAN_GRAIN=262144
-REDUCERS_AXIS_SCAN_VAR_GRAIN=4096
-REDUCERS_AXIS_WEIGHTED_GRAIN=262144
-REDUCERS_AXIS_ORDER_MEDIAN_GRAIN=1024
-REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN=1024
-REDUCERS_MINMAX_1D_GRAIN=16384
+| Setting | Value |
+|---|---|
+| Machine | Apple M4 Pro, macOS 26.6, arm64 |
+| Python / NumPy / Bottleneck | 3.13.11 / 2.4.6 / 1.6.0 |
+| Rayon / other thread pools | 14 / 1 |
+| Grain settings | Built-in defaults; saved tuning disabled |
+| Scan / weighted grains | 262144 |
+| Median / percentile grains | 1024 |
+| 1-D min/max grain | 65536 |
+
+The previous tables used v0.3.2 and tuned variance/minmax grains. Differences
+between those tables and these runs cannot be attributed solely to the code.
+Full output linked from each benchmark page records the commit, extension
+SHA-256, command, resolved grains, and dependency versions.
+
+Set up a project `.venv` with the benchmark dependencies and a release build:
+
+```bash
+uv sync --extra dev --extra bench
+uv run --no-sync maturin develop --release --locked
 ```
+
+Use these settings for the commands on each benchmark page:
+
+```bash
+export REDUCERS_IGNORE_TUNED_GRAINS=1 RAYON_NUM_THREADS=14
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
+export REDUCERS_BENCH_BUILD_COMMIT=$(git rev-parse HEAD)
+```
+
+Run benchmarks sequentially on an otherwise idle machine. Clear any
+`REDUCERS_*_GRAIN` overrides to reproduce built-in defaults. Set the commit
+label only after building that checkout; it is caller-supplied metadata.

@@ -316,26 +316,13 @@ and infinities while reading along the stacking axis, so scratch contains only
 the values that can contribute to the answer. This matches image-stack
 combination workloads where bad pixels are ignored.
 
-Performance depends on the reducer and the reducing-axis length. In the local
-benchmark (a `(100, 100, 100)` cube and short `(11, 100, 100)` / `(31, 100, 100)`
-stacks):
-
-- Order statistics dominate, and the margin grows with stack depth, because
-  `reducers` uses narrow per-slice kernels with less axis machinery: roughly 5x
-  at depth 11, 11x at depth 31, and 20x on the 100-deep cube for `median`.
-  NumPy's `median` also uses partition, so this is not a full-sort comparison.
-  NumPy's `nanpercentile` is ~100x+ slower because its axis path removes NaNs
-  per slice and then runs general quantile handling.
-- NaN-aware scans (`nanmean`/`nanvar`/`nansum`) beat NumPy at every depth; on the
-  shortest 11-deep stack Bottleneck still edges the very cheapest ones.
-- Cheap plain scans (`mean`/`sum`/`min`/`max`) favor NumPy's lean strided C loop
-  when the reducing axis and output are both small. `reducers` uses work-count
-  grains so those cases stay serial, while deeper stacks and wide shallow
-  stacks can still use Rayon. The benchmark tables report `float32` and
-  `float64` separately because the crossover differs by dtype.
-- Weighted `average` on `axis=0` carries more per-stack-level overhead and
-  trails NumPy for short stacks; on `axis=-1` (contiguous reduced-axis values)
-  it beats NumPy.
+Performance depends on the reducer, dtype, reducing-axis length, and output
+size. The [axis benchmarks](axis-benchmarks.qmd) measure these separately.
+Median and percentile benefit from narrow selection kernels and reusable
+scratch; NumPy's median also uses partition, so this is not a full-sort
+comparison. Cheap scans and weighted averages have different crossovers and
+can favor NumPy, especially on small outputs. The benchmark matrix omits axis
+`nanpercentile`/`nanquantile`; it makes no speed claim for those operations.
 
 ### Weights
 

@@ -1,0 +1,163 @@
+# contract: sigma=3,maxiters=5,ddof=0,nkeep=0,revert_on_nkeep=False
+# reference: independent NumPy finite-only cumulative mean/std or median/MAD
+# recorded UTC: 2026-09-08T12:54:34+00:00
+# python: 3.13.11 (CPython)
+# reducers: 0.4.0
+# reducers build commit: eb27fc03cfc371cf6adf5e570068703aab1218e4
+# extension sha256: 1203f0a2a77ca6325bb47a541869d8432eb7686f5fc7ef6d5d48732e2fbcdb94
+# numpy: 2.4.6
+# bottleneck: 1.6.0
+# os: macOS-26.6-arm64-arm-64bit-Mach-O
+# kernel: Darwin 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:27 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6041
+# machine: arm64
+# command: benchmarks/benchmark_sigma_clip.py --repeats 15 --warmups 3 --inner 100 --csv /tmp/reducers-benchmark-refresh/sigma-python-shared.csv
+# processor: arm
+# reducers threads: 14
+# REDUCERS_AXIS_SCAN_PLAIN_GRAIN: 262144
+# REDUCERS_AXIS_SCAN_NAN_GRAIN: 262144
+# REDUCERS_AXIS_SCAN_VAR_GRAIN: 262144
+# REDUCERS_AXIS_WEIGHTED_GRAIN: 262144
+# REDUCERS_AXIS_ORDER_MEDIAN_GRAIN: 1024
+# REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN: 1024
+# REDUCERS_MINMAX_1D_GRAIN: 65536
+# OMP_NUM_THREADS: 1
+# OPENBLAS_NUM_THREADS: 1
+# MKL_NUM_THREADS: 1
+# VECLIB_MAXIMUM_THREADS: 1
+layout,shape,dtype,profile,input_mask,operation,elements,inner_calls,repeats,warmups,median_ms
+vector,31,float32,mean_std,False,full,31,100,15,3,0.0025695899967104197
+vector,31,float32,mean_std,False,mask,31,100,15,3,0.0012450001668184996
+vector,31,float32,mean_std,False,fused_mean,31,100,15,3,0.001272499794140458
+vector,31,float32,mean_std,False,fused_median,31,100,15,3,0.0013725005555897951
+vector,31,float32,mean_std,True,full,31,100,15,3,0.0028291705530136824
+vector,31,float32,mean_std,True,mask,31,100,15,3,0.0013754109386354685
+vector,31,float32,mean_std,True,fused_mean,31,100,15,3,0.0013924995437264442
+vector,31,float32,mean_std,True,fused_median,31,100,15,3,0.0014416698832064867
+vector,31,float32,median_mad,False,full,31,100,15,3,0.0029912497848272324
+vector,31,float32,median_mad,False,mask,31,100,15,3,0.0016379100270569324
+vector,31,float32,median_mad,False,fused_mean,31,100,15,3,0.0016612501349300146
+vector,31,float32,median_mad,False,fused_median,31,100,15,3,0.0016504095401614904
+vector,31,float32,median_mad,True,full,31,100,15,3,0.0029404100496321917
+vector,31,float32,median_mad,True,mask,31,100,15,3,0.0016020797193050385
+vector,31,float32,median_mad,True,fused_mean,31,100,15,3,0.0016254198271781206
+vector,31,float32,median_mad,True,fused_median,31,100,15,3,0.0016233301721513271
+vector,257,float32,mean_std,False,full,257,100,15,3,0.004168340237811208
+vector,257,float32,mean_std,False,mask,257,100,15,3,0.001895000459626317
+vector,257,float32,mean_std,False,fused_mean,257,100,15,3,0.002239580499008298
+vector,257,float32,mean_std,False,fused_median,257,100,15,3,0.0027404201682657003
+vector,257,float32,mean_std,True,full,257,100,15,3,0.004146660212427378
+vector,257,float32,mean_std,True,mask,257,100,15,3,0.0020791601855307817
+vector,257,float32,mean_std,True,fused_mean,257,100,15,3,0.002261670306324959
+vector,257,float32,mean_std,True,fused_median,257,100,15,3,0.0024179101455956697
+vector,257,float32,median_mad,False,full,257,100,15,3,0.006806250894442201
+vector,257,float32,median_mad,False,mask,257,100,15,3,0.004784580087289214
+vector,257,float32,median_mad,False,fused_mean,257,100,15,3,0.005139999557286501
+vector,257,float32,median_mad,False,fused_median,257,100,15,3,0.00497042085044086
+vector,257,float32,median_mad,True,full,257,100,15,3,0.005469589959830046
+vector,257,float32,median_mad,True,mask,257,100,15,3,0.003333750646561384
+vector,257,float32,median_mad,True,fused_mean,257,100,15,3,0.0036150007508695126
+vector,257,float32,median_mad,True,fused_median,257,100,15,3,0.003337920643389225
+vector,4096,float32,mean_std,False,full,4096,100,15,3,0.0315541704185307
+vector,4096,float32,mean_std,False,mask,4096,100,15,3,0.01575249945744872
+vector,4096,float32,mean_std,False,fused_mean,4096,100,15,3,0.01806124928407371
+vector,4096,float32,mean_std,False,fused_median,4096,100,15,3,0.01939082983881235
+vector,4096,float32,mean_std,True,full,4096,100,15,3,0.031137500191107392
+vector,4096,float32,mean_std,True,mask,4096,100,15,3,0.014983749715611339
+vector,4096,float32,mean_std,True,fused_mean,4096,100,15,3,0.01691750017926097
+vector,4096,float32,mean_std,True,fused_median,4096,100,15,3,0.024600829929113388
+vector,4096,float32,median_mad,False,full,4096,100,15,3,0.04303166992031038
+vector,4096,float32,median_mad,False,mask,4096,100,15,3,0.027034999802708626
+vector,4096,float32,median_mad,False,fused_mean,4096,100,15,3,0.03143333946354687
+vector,4096,float32,median_mad,False,fused_median,4096,100,15,3,0.02685416955500841
+vector,4096,float32,median_mad,True,full,4096,100,15,3,0.06964709027670324
+vector,4096,float32,median_mad,True,mask,4096,100,15,3,0.05357959074899554
+vector,4096,float32,median_mad,True,fused_mean,4096,100,15,3,0.056114590261131525
+vector,4096,float32,median_mad,True,fused_median,4096,100,15,3,0.053363749757409096
+stack,31x64x64,float32,mean_std,False,full,126976,100,15,3,0.27847958030179143
+stack,31x64x64,float32,mean_std,False,mask,126976,100,15,3,0.24417667067609727
+stack,31x64x64,float32,mean_std,False,restored_flags,126976,100,15,3,0.27689708047546446
+stack,31x64x64,float32,mean_std,False,fused_mean,126976,100,15,3,0.1289691706188023
+stack,31x64x64,float32,mean_std,False,fused_median,126976,100,15,3,0.1494633301626891
+stack,31x64x64,float32,mean_std,True,full,126976,100,15,3,0.3006395907141268
+stack,31x64x64,float32,mean_std,True,mask,126976,100,15,3,0.25470374966971576
+stack,31x64x64,float32,mean_std,True,restored_flags,126976,100,15,3,0.28502290952019393
+stack,31x64x64,float32,mean_std,True,fused_mean,126976,100,15,3,0.1350275008007884
+stack,31x64x64,float32,mean_std,True,fused_median,126976,100,15,3,0.13238082989118993
+stack,31x64x64,float32,median_mad,False,full,126976,100,15,3,0.4452475009020418
+stack,31x64x64,float32,median_mad,False,mask,126976,100,15,3,0.40181040996685624
+stack,31x64x64,float32,median_mad,False,restored_flags,126976,100,15,3,0.4334912495687604
+stack,31x64x64,float32,median_mad,False,fused_mean,126976,100,15,3,0.3174195799510926
+stack,31x64x64,float32,median_mad,False,fused_median,126976,100,15,3,0.2972700004465878
+stack,31x64x64,float32,median_mad,True,full,126976,100,15,3,0.3733979188837111
+stack,31x64x64,float32,median_mad,True,mask,126976,100,15,3,0.3338100004475564
+stack,31x64x64,float32,median_mad,True,restored_flags,126976,100,15,3,0.3658033302053809
+stack,31x64x64,float32,median_mad,True,fused_mean,126976,100,15,3,0.21828874945640564
+stack,31x64x64,float32,median_mad,True,fused_median,126976,100,15,3,0.20847125095315278
+vector,31,float64,mean_std,False,full,31,100,15,3,0.0026995898224413395
+vector,31,float64,mean_std,False,mask,31,100,15,3,0.0013445899821817875
+vector,31,float64,mean_std,False,fused_mean,31,100,15,3,0.0013358297292143106
+vector,31,float64,mean_std,False,fused_median,31,100,15,3,0.0014104100409895182
+vector,31,float64,mean_std,True,full,31,100,15,3,0.002815000480040908
+vector,31,float64,mean_std,True,mask,31,100,15,3,0.0014416698832064867
+vector,31,float64,mean_std,True,fused_mean,31,100,15,3,0.0014424999244511127
+vector,31,float64,mean_std,True,fused_median,31,100,15,3,0.0015600002370774746
+vector,31,float64,median_mad,False,full,31,100,15,3,0.0031466595828533173
+vector,31,float64,median_mad,False,mask,31,100,15,3,0.0017654197290539742
+vector,31,float64,median_mad,False,fused_mean,31,100,15,3,0.0017979100812226534
+vector,31,float64,median_mad,False,fused_median,31,100,15,3,0.0017637491691857576
+vector,31,float64,median_mad,True,full,31,100,15,3,0.003088749945163727
+vector,31,float64,median_mad,True,mask,31,100,15,3,0.0017029198352247477
+vector,31,float64,median_mad,True,fused_mean,31,100,15,3,0.0017133296933025122
+vector,31,float64,median_mad,True,fused_median,31,100,15,3,0.0016891700215637684
+vector,257,float64,mean_std,False,full,257,100,15,3,0.004376670112833381
+vector,257,float64,mean_std,False,mask,257,100,15,3,0.0021312490571290255
+vector,257,float64,mean_std,False,fused_mean,257,100,15,3,0.002257500309497118
+vector,257,float64,mean_std,False,fused_median,257,100,15,3,0.0029624998569488525
+vector,257,float64,mean_std,True,full,257,100,15,3,0.004533330211415887
+vector,257,float64,mean_std,True,mask,257,100,15,3,0.0022599997464567423
+vector,257,float64,mean_std,True,fused_mean,257,100,15,3,0.0023912498727440834
+vector,257,float64,mean_std,True,fused_median,257,100,15,3,0.0025462498888373375
+vector,257,float64,median_mad,False,full,257,100,15,3,0.007438750471919775
+vector,257,float64,median_mad,False,mask,257,100,15,3,0.0051679101306945086
+vector,257,float64,median_mad,False,fused_mean,257,100,15,3,0.005372499581426382
+vector,257,float64,median_mad,False,fused_median,257,100,15,3,0.005137500120326877
+vector,257,float64,median_mad,True,full,257,100,15,3,0.005614591063931584
+vector,257,float64,median_mad,True,mask,257,100,15,3,0.0033745798282325268
+vector,257,float64,median_mad,True,fused_mean,257,100,15,3,0.003689170116558671
+vector,257,float64,median_mad,True,fused_median,257,100,15,3,0.003374170046299696
+vector,4096,float64,mean_std,False,full,4096,100,15,3,0.03204833948984742
+vector,4096,float64,mean_std,False,mask,4096,100,15,3,0.015062500024214387
+vector,4096,float64,mean_std,False,fused_mean,4096,100,15,3,0.016488750698044896
+vector,4096,float64,mean_std,False,fused_median,4096,100,15,3,0.017768749967217445
+vector,4096,float64,mean_std,True,full,4096,100,15,3,0.032732910476624966
+vector,4096,float64,mean_std,True,mask,4096,100,15,3,0.015701669035479426
+vector,4096,float64,mean_std,True,fused_mean,4096,100,15,3,0.017407499253749847
+vector,4096,float64,mean_std,True,fused_median,4096,100,15,3,0.025573750026524067
+vector,4096,float64,median_mad,False,full,4096,100,15,3,0.04370249924249947
+vector,4096,float64,median_mad,False,mask,4096,100,15,3,0.02683082944713533
+vector,4096,float64,median_mad,False,fused_mean,4096,100,15,3,0.03197291982360184
+vector,4096,float64,median_mad,False,fused_median,4096,100,15,3,0.026811660500243306
+vector,4096,float64,median_mad,True,full,4096,100,15,3,0.07187500013969839
+vector,4096,float64,median_mad,True,mask,4096,100,15,3,0.05610166001133621
+vector,4096,float64,median_mad,True,fused_mean,4096,100,15,3,0.06020667031407356
+vector,4096,float64,median_mad,True,fused_median,4096,100,15,3,0.054046669974923134
+stack,31x64x64,float64,mean_std,False,full,126976,100,15,3,0.2809758298099041
+stack,31x64x64,float64,mean_std,False,mask,126976,100,15,3,0.24103791103698313
+stack,31x64x64,float64,mean_std,False,restored_flags,126976,100,15,3,0.272533749230206
+stack,31x64x64,float64,mean_std,False,fused_mean,126976,100,15,3,0.12703250045888126
+stack,31x64x64,float64,mean_std,False,fused_median,126976,100,15,3,0.15533874975517392
+stack,31x64x64,float64,mean_std,True,full,126976,100,15,3,0.3010870795696974
+stack,31x64x64,float64,mean_std,True,mask,126976,100,15,3,0.2581179200205952
+stack,31x64x64,float64,mean_std,True,restored_flags,126976,100,15,3,0.282747910823673
+stack,31x64x64,float64,mean_std,True,fused_mean,126976,100,15,3,0.1345154200680554
+stack,31x64x64,float64,mean_std,True,fused_median,126976,100,15,3,0.1448999997228384
+stack,31x64x64,float64,median_mad,False,full,126976,100,15,3,0.4400712496135384
+stack,31x64x64,float64,median_mad,False,mask,126976,100,15,3,0.4001187498215586
+stack,31x64x64,float64,median_mad,False,restored_flags,126976,100,15,3,0.4283983295317739
+stack,31x64x64,float64,median_mad,False,fused_mean,126976,100,15,3,0.2775983407627791
+stack,31x64x64,float64,median_mad,False,fused_median,126976,100,15,3,0.2727933309506625
+stack,31x64x64,float64,median_mad,True,full,126976,100,15,3,0.37469291943125427
+stack,31x64x64,float64,median_mad,True,mask,126976,100,15,3,0.33804875100031495
+stack,31x64x64,float64,median_mad,True,restored_flags,126976,100,15,3,0.36892459029331803
+stack,31x64x64,float64,median_mad,True,fused_mean,126976,100,15,3,0.22367540979757905
+stack,31x64x64,float64,median_mad,True,fused_median,126976,100,15,3,0.20607957965694368

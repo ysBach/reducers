@@ -14,8 +14,8 @@ reducers first, then NaN-aware reducers.
 ``percentile``/``quantile`` request three positions, ``[16, 50, 84]`` (the
 median and +/-1 sigma). The NaN-aware percentile/quantile rows are skipped: NumPy
 uses per-slice NaN removal plus general quantile machinery for axis
-``nanpercentile``/``nanquantile``, so timing it just stalls the benchmark for a
-ratio that is always ~100-1000x.
+``nanpercentile``/``nanquantile``. They are excluded from this benchmark matrix;
+no speed claim is made for those omitted operations.
 """
 
 from __future__ import annotations
@@ -25,7 +25,13 @@ from functools import partial
 
 import numpy as np
 import reducers as rd
-from _benchutils import assert_equivalent, print_environment, ratio_cell, timeit
+from _benchutils import (
+    assert_equivalent,
+    print_environment,
+    ratio_cell,
+    timeit,
+    validate_optional,
+)
 
 try:
     import bottleneck as bn
@@ -212,6 +218,7 @@ def main() -> None:
             for label, shape, axis in CASES:
                 a = make_stack(shape, dtype, include_nan=not plain)
                 for op in args.ops:
+                    bn_excluded = False
                     # np.nanpercentile/nanquantile use per-slice NaN removal
                     # plus general quantile machinery on axis reductions.
                     if not plain and op in ("percentile", "quantile"):
@@ -240,9 +247,10 @@ def main() -> None:
                         else:
                             np_call = partial(np_nanminmax, a, axis)
                             rd_call = partial(axis_call, rd.nanminmax, a, axis)
+                            expected = np_call()
                             assert_equivalent(
                                 rd_call(),
-                                np_call(),
+                                expected,
                                 dtype=dtype,
                                 label=(
                                     f"{_NAN_DISPLAY_OP[op]} {label} "
@@ -259,15 +267,25 @@ def main() -> None:
                                 repeats=args.repeats,
                                 warmups=args.warmups,
                             )
-                            bnt = (
-                                timeit(
-                                    partial(bn_nanminmax, a, axis),
+                            bn_call = partial(bn_nanminmax, a, axis)
+                            if bn is not None and validate_optional(
+                                bn_call,
+                                expected,
+                                dtype=dtype,
+                                label=(
+                                    f"{_NAN_DISPLAY_OP[op]} {label} "
+                                    f"axis={axis} dtype={dtype}"
+                                ),
+                                name="bottleneck",
+                            ):
+                                bnt = timeit(
+                                    bn_call,
                                     repeats=args.repeats,
                                     warmups=args.warmups,
                                 )
-                                if bn is not None
-                                else None
-                            )
+                            else:
+                                bnt = None
+                                bn_excluded = bn is not None
                     elif op == "average":
                         weights = make_weights(shape, axis, dtype, full_shape=False)
                         if plain:
@@ -364,21 +382,33 @@ def main() -> None:
                             repeats=args.repeats,
                             warmups=args.warmups,
                         )
-                        bnt = (
-                            timeit(
-                                lambda fn=bn_fn, arr=a, ax=axis: fn(arr, axis=ax),
-                                repeats=args.repeats,
-                                warmups=args.warmups,
-                            )
-                            if bn_fn is not None
-                            else None
-                        )
+                        if bn_fn is not None:
+                            bn_call = partial(axis_call, bn_fn, a, axis)
+                            if validate_optional(
+                                bn_call,
+                                np_call(),
+                                dtype=dtype,
+                                label=f"{op} {label} axis={axis} dtype={dtype}",
+                                name="bottleneck",
+                            ):
+                                bnt = timeit(
+                                    bn_call,
+                                    repeats=args.repeats,
+                                    warmups=args.warmups,
+                                )
+                            else:
+                                bnt = None
+                                bn_excluded = True
+                        else:
+                            bnt = None
 
                     npt_s = "-" if npt is None else f"{npt:.2f}"
-                    bnt_s = "-" if bnt is None else f"{bnt:.2f}"
+                    bnt_s = (
+                        "n/a" if bn_excluded else "-" if bnt is None else f"{bnt:.2f}"
+                    )
                     rdt_s = "-" if rdt is None else f"{rdt:.2f}"
                     npt_ratio = ratio_cell(npt, rdt)
-                    bnt_ratio = ratio_cell(bnt, rdt)
+                    bnt_ratio = "n/a" if bn_excluded else ratio_cell(bnt, rdt)
 
                     print(
                         f"| {label} | {shape} | {axis} | {dtype} | "

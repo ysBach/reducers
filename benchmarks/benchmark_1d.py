@@ -12,7 +12,13 @@ from collections.abc import Callable
 
 import numpy as np
 import reducers as rd
-from _benchutils import assert_equivalent, print_environment, ratio_cell, timeit
+from _benchutils import (
+    assert_equivalent,
+    print_environment,
+    ratio_cell,
+    timeit,
+    validate_optional,
+)
 
 try:
     import bottleneck as bn
@@ -205,12 +211,26 @@ def main() -> None:
                 for op in args.ops:
                     funcs = funcs_for(v, op, plain=plain)
                     expected = funcs["numpy"]()
-                    assert_equivalent(
-                        funcs["reducers"](),
-                        expected,
-                        dtype=dtype,
-                        label=f"{op} length={length} dtype={dtype}",
-                    )
+                    excluded: set[str] = set()
+                    for name, fn in list(funcs.items()):
+                        if name != "numpy":
+                            label = f"{op} length={length} dtype={dtype}"
+                            if name == "reducers":
+                                assert_equivalent(
+                                    fn(),
+                                    expected,
+                                    dtype=dtype,
+                                    label=f"{name} {label}",
+                                )
+                            elif not validate_optional(
+                                fn,
+                                expected,
+                                dtype=dtype,
+                                label=label,
+                                name=name,
+                            ):
+                                excluded.add(name)
+                                del funcs[name]
                     t = {
                         n: timeit(
                             fn,
@@ -225,10 +245,18 @@ def main() -> None:
                     rdt = t.get("reducers")
 
                     npt_s = "-" if npt is None else f"{npt * 1000:.2f}"
-                    bnt_s = "-" if bnt is None else f"{bnt * 1000:.2f}"
+                    bnt_s = (
+                        "n/a"
+                        if "bottleneck" in excluded
+                        else "-"
+                        if bnt is None
+                        else f"{bnt * 1000:.2f}"
+                    )
                     rdt_s = "-" if rdt is None else f"{rdt * 1000:.2f}"
                     npt_ratio = ratio_cell(npt, rdt)
-                    bnt_ratio = ratio_cell(bnt, rdt)
+                    bnt_ratio = (
+                        "n/a" if "bottleneck" in excluded else ratio_cell(bnt, rdt)
+                    )
 
                     display_op = op if plain else _NAN_DISPLAY_OP[op]
                     print(
