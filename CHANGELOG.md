@@ -1,22 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-09-08
 
-- CI, tag-only trusted publishing to PyPI and crates.io.
-
-- Add a Python-independent Rust `sigma_clip` API with reusable workspace,
-  cumulative finite-only rejection, separate rejection and dispersion centers,
-  standard deviation/MAD, rollback limits, final-count requirements, and
-  optional clipped mean/median and diagnostics. Defaults disable survivor
-  rollback (`nkeep=0`, `revert_on_nkeep=false`).
-- Add Python sigma-clipping tools: vector and axis-0
-  stack diagnostics, mask-only and fused mean/median calls, restoration flags,
-  Euclidean mask growth, and reusable `SigClip` settings. All clipping calls use
-  the shared Rust engine, with generic defaults `nkeep=0` and
-  `revert_on_nkeep=False`. Support empty sample inputs.
-- Remove redundant sigma-clipping scans and final reductions, reuse statistics
-  scratch, and balance parallel stack columns using the existing grain setting.
-  Preserve clipping arithmetic, input order, defaults, and output layouts.
+- Add reusable Rust and Python sigma-clipping APIs from
+  [imcombiners](https://github.com/ysBach/imcombiners), with defaults
+  changed to `nkeep=0` and `revert_on_nkeep=False` (more general).
+- Speed up sigma clipping through statistics/scratch reuse, reduced Python
+  overhead, and better parallel scheduling; see [performance notes](docs/quarto/performance/sigma-clipping.qmd).
+- Standardize CI and tag-only trusted publishing to PyPI and crates.io.
 
 ## 0.3.2 - 2026-09-05
 
