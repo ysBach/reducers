@@ -1,0 +1,89 @@
+# sigclip_mask_1d { #reducers.sigclip_mask_1d }
+
+```python
+sigclip_mask_1d(
+    values,
+    *,
+    mask=None,
+    sigma=(3.0, 3.0),
+    maxiters=5,
+    ddof=0,
+    nkeep=0,
+    maxrej=None,
+    cenfunc='median',
+    clip_cen=None,
+    stdfunc='std',
+    revert_on_nkeep=False,
+    validate=True,
+)
+```
+
+Return only the sigma-clipping rejection mask for a 1-D value vector.
+
+## Parameters {.doc-section .doc-section-parameters}
+
+<code>[**values**]{.parameter-name} [:]{.parameter-annotation-sep} [(ndarray, shape(N))]{.parameter-annotation}</code>
+
+:   One sample vector.
+
+<code>[**mask**]{.parameter-name} [:]{.parameter-annotation-sep} [ndarray or None]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Same shape as the input; `True` excludes a sample. Default `None`.
+
+<code>[**sigma**]{.parameter-name} [:]{.parameter-annotation-sep} [float or (float, float)]{.parameter-annotation} [ = ]{.parameter-default-sep} [(3.0, 3.0)]{.parameter-default}</code>
+
+:   Finite, nonnegative lower and upper multipliers; default `(3.0, 3.0)`. Samples exactly on a threshold survive.
+
+<code>[**maxiters**]{.parameter-name} [:]{.parameter-annotation-sep} [int]{.parameter-annotation} [ = ]{.parameter-default-sep} [5]{.parameter-default}</code>
+
+:   Maximum attempted passes; default `5`. `0` applies initial exclusions only.
+
+<code>[**ddof**]{.parameter-name} [:]{.parameter-annotation-sep} [int]{.parameter-annotation} [ = ]{.parameter-default-sep} [0]{.parameter-default}</code>
+
+:   Divide squared deviations by ``n - ddof``; default `0`. Ignored for MAD. Undefined statistics stop the current pass without changing the mask.
+
+<code>[**nkeep**]{.parameter-name} [:]{.parameter-annotation-sep} [int]{.parameter-annotation} [ = ]{.parameter-default-sep} [0]{.parameter-default}</code>
+
+:   Rollback minimum, active only with `revert_on_nkeep=True`; default `0`. This is not a final minimum-count requirement.
+
+<code>[**maxrej**]{.parameter-name} [:]{.parameter-annotation-sep} [int or None]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Roll back a pass if total exclusions exceed this count. Counts input masks and nonfinite samples as well as clipping; default `None` (unlimited).
+
+<code>[**cenfunc**]{.parameter-name} [:]{.parameter-annotation-sep} [str]{.parameter-annotation} [ = ]{.parameter-default-sep} [\'median\']{.parameter-default}</code>
+
+:   Rejection center: `"median"` (default), `"lmedian"`, or `"mean"`.
+
+<code>[**clip_cen**]{.parameter-name} [:]{.parameter-annotation-sep} [str or None]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Dispersion center: `"mean"`, `"median"`, `"lmedian"`, or `"cenfunc"` to use the computed rejection center directly. `None` follows `cenfunc`'s estimator, preserving its arithmetic; default `None`.
+
+<code>[**stdfunc**]{.parameter-name} [:]{.parameter-annotation-sep} [str]{.parameter-annotation} [ = ]{.parameter-default-sep} [\'std\']{.parameter-default}</code>
+
+:   `"std"` (default) or `"mad"` (median absolute deviation times 1.4826).
+
+<code>[**revert_on_nkeep**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
+
+:   Enable whole-pass survivor rollback; default `False`. Earlier accepted rejections and initial exclusions remain after rollback.
+
+<code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
+
+:   Validate/promote arrays; default `True`. With `False`, supply a 1-D float32/float64 vector.
+
+## Returns {.doc-section .doc-section-returns}
+
+<code>[**mask_rej**]{.parameter-name} [:]{.parameter-annotation-sep} [ndarray of bool, same shape as input]{.parameter-annotation}</code>
+
+:   Final exclusions, including input masks and nonfinite samples.
+
+## Notes {.doc-section .doc-section-notes}
+
+NaN, infinities, and input masks are excluded before clipping.
+Inputs are never modified. Accepted rejections accumulate. Empty/all-excluded inputs
+have all-excluded masks, NaN extrema/spread, and NaN fused reductions.
+
+With `validate=True`, `float32` and `float64` are preserved; `uint8`, `uint16`,
+and `int16` use `float32`, and `int32` uses `float64`. Other dtypes are rejected.
+Noncontiguous input is copied only when needed. Centers and MAD round to the
+input dtype before threshold comparisons. Squared residuals and limits can
+overflow or underflow.

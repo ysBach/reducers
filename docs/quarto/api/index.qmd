@@ -44,3 +44,19 @@ Reducers-specific helpers.
 | [lmedian](lmedian.qmd#reducers.lmedian) | Return the lower value-selecting median while skipping NaN values. |
 | [minmax](minmax.qmd#reducers.minmax) | Return the minimum and maximum with NaN propagation. |
 | [count_finite](count_finite.qmd#reducers.count_finite) | Return the number of finite values. |
+
+## Sigma clipping
+
+Finite-only clipping with reusable settings and fused mean/median outputs.
+
+| | |
+| --- | --- |
+| [sigclip](sigclip.qmd#reducers.sigclip) | Sigma-clipping rejection. |
+| [sigclip_1d](sigclip_1d.qmd#reducers.sigclip_1d) | Sigma-clipping rejection for a 1-D value vector. |
+| [sigclip_mask](sigclip_mask.qmd#reducers.sigclip_mask) | Return only the sigma-clipping rejection mask. |
+| [sigclip_mask_1d](sigclip_mask_1d.qmd#reducers.sigclip_mask_1d) | Return only the sigma-clipping rejection mask for a 1-D value vector. |
+| [sigclip_combine](sigclip_combine.qmd#reducers.sigclip_combine) | Return an output-only sigma-clipped mean or median. |
+| [sigclip_combine_1d](sigclip_combine_1d.qmd#reducers.sigclip_combine_1d) | Return a 1-D sigma-clipped mean or median. |
+| [sigclip_restored_flags](sigclip_restored_flags.qmd#reducers.sigclip_restored_flags) | Return per-sample restored-candidate flags for sigma clipping. |
+| [grow_mask](grow_mask.qmd#reducers.grow_mask) | Dilate a stack mask over spatial axes by an exact Euclidean radius. |
+| [SigClip](sigclip-settings.qmd#reducers.SigClip) | Reusable, immutable settings for axis-0 sigma clipping. |

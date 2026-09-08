@@ -1,0 +1,31 @@
+# grow_mask { #reducers.grow_mask }
+
+```python
+grow_mask(mask, grow, *, validate=True)
+```
+
+Dilate a stack mask over spatial axes by an exact Euclidean radius.
+
+Axis 0 is the stack axis and is never grown across. For each input plane,
+every `True` sample marks all spatial samples whose integer-grid Euclidean
+distance is less than or equal to `grow`.
+
+## Parameters {.doc-section .doc-section-parameters}
+
+<code>[**mask**]{.parameter-name} [:]{.parameter-annotation-sep} [ndarray of bool, shape (N, *spatial)]{.parameter-annotation}</code>
+
+:   Rejection mask to grow. `True` values are expanded within each plane.
+
+<code>[**grow**]{.parameter-name} [:]{.parameter-annotation-sep} [float]{.parameter-annotation}</code>
+
+:   Non-negative radius in pixels. `0` returns an unchanged copy. Values below `1` grow no additional integer-grid samples.
+
+<code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
+
+:   If `True`, validate dimensionality, dtype, finiteness, and contiguity before entering the Rust kernel. If `False`, callers must provide a C-contiguous boolean array with at least two dimensions and a finite non-negative radius.
+
+## Returns {.doc-section .doc-section-returns}
+
+<code>[**grown**]{.parameter-name} [:]{.parameter-annotation-sep} [ndarray of bool, shape (N, *spatial)]{.parameter-annotation}</code>
+
+:   Grown mask with the same shape as `mask`.

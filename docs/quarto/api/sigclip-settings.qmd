@@ -1,0 +1,114 @@
+# SigClip { #reducers.SigClip }
+
+```python
+SigClip(
+    sigma=(3.0, 3.0),
+    maxiters=5,
+    cenfunc='median',
+    clip_cen=None,
+    stdfunc='std',
+    ddof=0,
+    nkeep=0,
+    maxrej=None,
+    revert_on_nkeep=False,
+    grow=None,
+)
+```
+
+Reusable, immutable settings for axis-0 sigma clipping.
+
+## Parameters {.doc-section .doc-section-parameters}
+
+<code>[**sigma**]{.parameter-name} [:]{.parameter-annotation-sep} [float or (float, float)]{.parameter-annotation} [ = ]{.parameter-default-sep} [(3.0, 3.0)]{.parameter-default}</code>
+
+:   Lower/upper thresholds; default `(3.0, 3.0)`.
+
+<code>[**maxiters**]{.parameter-name} [:]{.parameter-annotation-sep} [int]{.parameter-annotation} [ = ]{.parameter-default-sep} [5]{.parameter-default}</code>
+
+:   Maximum attempted passes; default `5`.
+
+<code>[**cenfunc**]{.parameter-name} [:]{.parameter-annotation-sep} [str]{.parameter-annotation} [ = ]{.parameter-default-sep} [\'median\']{.parameter-default}</code>
+
+:   Rejection center: `"median"` (default), `"lmedian"`, or `"mean"`.
+
+<code>[**clip_cen**]{.parameter-name} [:]{.parameter-annotation-sep} [str or None]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Dispersion center; `None` follows `cenfunc`.
+
+<code>[**stdfunc**]{.parameter-name} [:]{.parameter-annotation-sep} [str]{.parameter-annotation} [ = ]{.parameter-default-sep} [\'std\']{.parameter-default}</code>
+
+:   `"std"` (default) or scaled `"mad"`.
+
+<code>[**ddof**]{.parameter-name} [:]{.parameter-annotation-sep} [int]{.parameter-annotation} [ = ]{.parameter-default-sep} [0]{.parameter-default}</code>
+
+:   Degrees of freedom for standard deviation; default `0`.
+
+<code>[**nkeep**]{.parameter-name} [:]{.parameter-annotation-sep} [int]{.parameter-annotation} [ = ]{.parameter-default-sep} [0]{.parameter-default}</code>
+
+:   Survivor rollback minimum; default `0`.
+
+<code>[**maxrej**]{.parameter-name} [:]{.parameter-annotation-sep} [int or None]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Maximum total exclusions before rollback; default `None` (unlimited).
+
+<code>[**revert_on_nkeep**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [False]{.parameter-default}</code>
+
+:   Enable survivor rollback; default `False`.
+
+<code>[**grow**]{.parameter-name} [:]{.parameter-annotation-sep} [float or None]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Euclidean mask-growth radius within each plane; default `None`.
+
+## Notes {.doc-section .doc-section-notes}
+
+This object stores settings, not mutable Rust workspace. Its ``apply()``
+method returns the same six outputs as ``sigclip()``.
+
+## Attributes
+
+| Name | Description |
+| --- | --- |
+| [cenfunc](#reducers.SigClip.cenfunc) | str(object='') -> str |
+| [clip_cen](#reducers.SigClip.clip_cen) | The type of the None singleton. |
+| [ddof](#reducers.SigClip.ddof) | int([x]) -> integer |
+| [grow](#reducers.SigClip.grow) | The type of the None singleton. |
+| [maxiters](#reducers.SigClip.maxiters) | int([x]) -> integer |
+| [maxrej](#reducers.SigClip.maxrej) | The type of the None singleton. |
+| [nkeep](#reducers.SigClip.nkeep) | int([x]) -> integer |
+| [revert_on_nkeep](#reducers.SigClip.revert_on_nkeep) | Returns True when the argument is true, False otherwise. |
+| [sigma](#reducers.SigClip.sigma) | Built-in immutable sequence. |
+| [stdfunc](#reducers.SigClip.stdfunc) | str(object='') -> str |
+
+## Methods
+
+| Name | Description |
+| --- | --- |
+| [apply](#reducers.SigClip.apply) | Clip an axis-0 stack using this object's stored settings. |
+
+### apply { #reducers.SigClip.apply }
+
+```python
+SigClip.apply(arr, mask=None, *, validate=True)
+```
+
+Clip an axis-0 stack using this object's stored settings.
+
+#### Parameters {.doc-section .doc-section-parameters}
+
+<code>[**arr**]{.parameter-name} [:]{.parameter-annotation-sep} [(ndarray, shape(N, *spatial))]{.parameter-annotation}</code>
+
+:   Input values; the sample axis is axis 0.
+
+<code>[**mask**]{.parameter-name} [:]{.parameter-annotation-sep} [ndarray or None]{.parameter-annotation} [ = ]{.parameter-default-sep} [None]{.parameter-default}</code>
+
+:   Same-shape input exclusions; `True` means excluded.
+
+<code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
+
+:   Validate and normalize arrays; default `True`.
+
+#### Returns {.doc-section .doc-section-returns}
+
+<code>[**result**]{.parameter-name} [:]{.parameter-annotation-sep} [tuple]{.parameter-annotation}</code>
+
+:   ``(mask_rej, std, low, upp, nit, output_flags)`` from ``sigclip()``.

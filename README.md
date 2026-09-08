@@ -79,6 +79,23 @@ weighted_sum, unweighted_sum, sum_of_weights = rd.nansum(
 
 Dual use: the kernel modules are pure Rust (no PyO3/NumPy) and usable as a crate.
 
+The Rust `sigma_clip` module provides cumulative sigma clipping over slices,
+with reusable caller-owned workspace, independent rejection/dispersion centers,
+rollback policies, and optional clipped mean or median. Defaults are `nkeep=0`
+and `revert_on_nkeep=false`, making survivor rollback opt-in. See the
+[Rust API](docs/quarto/rust-api.qmd) and
+[performance notes](docs/quarto/performance/sigma-clipping.qmd).
+
+Python exposes `sigclip`/`sigclip_1d`, mask-only variants, fused
+`sigclip_combine`/`sigclip_combine_1d` mean/median calls, restoration flags,
+`grow_mask`, and reusable `SigClip` settings. They call the same Rust engine:
+
+```python
+values = np.array([1., 2., 3., 4., 100.])
+rd.sigclip_mask_1d(values, sigma=2)  # [False, False, False, False, True]
+rd.sigclip_combine_1d(values, combine="mean", sigma=2)  # 2.5
+```
+
 ## Maximum-performance Python calls
 
 For fixed production hot loops, import the low-level Python API as `rdl`:
@@ -109,3 +126,6 @@ See the documentation for details on achieving maximum performance.
 - NumPy-like **subset**: There are many unsupported parameters like `out`, `keepdims`, `where`, `dtype`, or percentile `method` (linear only). Adding them will not likely be considered unless there is a strong use case, as they add complexity and maintenance burden. The main focus is on the core reduction logic and, more importantly, performance.
 
 See the documentation for detailed API semantics, performance notes, axis behavior, and release wheels: <https://ysbach.github.io/reducers/>.
+
+Maintainers: see [RELEASING.md](RELEASING.md) for CI, dependency updates, release
+rehearsals, trusted-publisher setup, and recovery.

@@ -32,5 +32,16 @@ website:
       - api/minmax.qmd
       - api/count_finite.qmd
       section: Extra reducers
+    - contents:
+      - api/sigclip.qmd
+      - api/sigclip_1d.qmd
+      - api/sigclip_mask.qmd
+      - api/sigclip_mask_1d.qmd
+      - api/sigclip_combine.qmd
+      - api/sigclip_combine_1d.qmd
+      - api/sigclip_restored_flags.qmd
+      - api/grow_mask.qmd
+      - api/sigclip-settings.qmd
+      section: Sigma clipping
     id: api
   - id: dummy-sidebar

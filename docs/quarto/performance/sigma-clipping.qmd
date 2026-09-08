@@ -1,0 +1,27 @@
+---
+title: "Sigma-clipping performance"
+---
+
+Sigma clipping keeps its numerical policy in a small Rust kernel used by both
+the vector and axis-0 stack adapters.
+
+- Caller-owned `Workspace` stores masks, rejection indices, statistical
+  scratch, and optional restoration flags. `with_capacity` reserves buffers
+  for reuse; inputs remain borrowed.
+- The stack adapter reuses a column buffer and workspace across columns within
+  each Rayon job. It scans sample/mask pairs directly, uses existing
+  axis-order grain blocks, and takes the serial path for one block.
+- Fused mean/median calls clip and reduce each column together. Valid final
+  statistics are reused until the rejection mask changes; final means sum
+  retained `f64` scratch in original order.
+- MAD reuses retained-value scratch, populating it only when needed.
+- Python normalizes dtype/contiguity once and skips matching mask reshapes.
+  Stack work uses the order-statistic Rayon grain.
+
+NaN and infinite samples are excluded. Centers and MAD are narrowed to input
+dtype before threshold tests. Standard-deviation summation order is configured;
+final means use sequential `f64`. MAD is `1.4826` times median absolute
+deviation and ignores `ddof`. Strict `>` rejection preserves equality. Squared
+residuals, limits, and variance sums can overflow; tiny values can underflow.
+Invalid statistics leave masks unchanged; diagnostics report the last valid
+spread.

@@ -55,6 +55,17 @@ from ._core import (
     set_parallel_grain,
     set_parallel_grains,
 )
+from .sigma_clip import (
+    SigClip,
+    grow_mask,
+    sigclip,
+    sigclip_1d,
+    sigclip_combine,
+    sigclip_combine_1d,
+    sigclip_mask,
+    sigclip_mask_1d,
+    sigclip_restored_flags,
+)
 
 apply_saved_parallel_grains_on_import()
 
@@ -64,6 +75,7 @@ except ImportError:  # pragma: no cover - extension not yet built
     __version__ = "0.0.0+unbuilt"
 
 __all__ = [
+    "SigClip",
     "average",
     "count_finite",
     "apply_parallel_grains_config",
@@ -71,6 +83,7 @@ __all__ = [
     "get_default_parallel_grains",
     "get_num_threads",
     "get_parallel_grains",
+    "grow_mask",
     "lmedian",
     "load_parallel_grains_config",
     "lowlevel",
@@ -99,6 +112,13 @@ __all__ = [
     "set_minmax_1d_grain",
     "set_parallel_grain",
     "set_parallel_grains",
+    "sigclip",
+    "sigclip_1d",
+    "sigclip_combine",
+    "sigclip_combine_1d",
+    "sigclip_mask",
+    "sigclip_mask_1d",
+    "sigclip_restored_flags",
     "std",
     "sum",
     "use_default_parallel_grains",

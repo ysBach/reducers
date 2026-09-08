@@ -7,7 +7,7 @@ name = "reducers"
 version = "0.3.2"
 description = "Rust-backed reductions for NumPy arrays (plain + NaN-aware)"
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "MIT AND BSD-3-Clause" }
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
 classifiers = [
@@ -46,6 +46,7 @@ module-name = "reducers._core"
 profile = "release"
 features = ["extension-module"]
 exclude = [
+    "archaic/**",
     "**/.DS_Store",
     "**/__pycache__/*",
     "**/*.pyc",
@@ -59,6 +60,7 @@ exclude = [
 line-length = 88
 target-version = "py310"
 extend-exclude = [
+    "archaic",
     ".uv-cache",
     ".venv",
     "docs/quarto/.quarto",
@@ -68,3 +70,6 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "NPY"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

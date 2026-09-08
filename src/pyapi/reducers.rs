@@ -520,10 +520,7 @@ weighted_sum_and_weights_policy_op!(
     ScanPolicy::SkipNonFinite
 );
 
-weighted_sum_and_unweighted_policy_op!(
-    weighted_sum_and_unweighted_valid_1d,
-    ScanPolicy::AllFinite
-);
+weighted_sum_and_unweighted_policy_op!(weighted_sum_and_unweighted_valid_1d, ScanPolicy::AllFinite);
 weighted_sum_and_unweighted_policy_op!(
     weighted_sum_and_unweighted_skip_nan_1d,
     ScanPolicy::SkipNan

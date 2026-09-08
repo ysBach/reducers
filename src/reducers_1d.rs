@@ -308,7 +308,12 @@ pub fn weighted_sum<T: Float, W: Weight>(
     }
 }
 
-fn weighted_sum_parts<T: Float, W: Weight, const WITH_WEIGHTS: bool, const WITH_UNWEIGHTED: bool>(
+fn weighted_sum_parts<
+    T: Float,
+    W: Weight,
+    const WITH_WEIGHTS: bool,
+    const WITH_UNWEIGHTED: bool,
+>(
     values: &[T],
     weights: &[W],
     policy: ScanPolicy,

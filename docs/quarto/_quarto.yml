@@ -18,6 +18,8 @@ website:
             text: "Overview"
           - href: performance/max-performance.qmd
             text: "How It Gets Fast"
+          - href: performance/sigma-clipping.qmd
+            text: "Sigma Clipping"
           - href: performance/parallel-threads.qmd
             text: "Parallel Threads"
           - href: performance/array-1d-benchmarks.qmd
@@ -88,6 +90,21 @@ quartodoc:
         - lmedian
         - minmax
         - count_finite
+    - title: Sigma clipping
+      desc: Finite-only clipping with reusable settings and fused mean/median outputs.
+      contents:
+        - sigclip
+        - sigclip_1d
+        - sigclip_mask
+        - sigclip_mask_1d
+        - sigclip_combine
+        - sigclip_combine_1d
+        - sigclip_restored_flags
+        - grow_mask
+        - kind: page
+          path: sigclip-settings
+          contents:
+            - SigClip
   renderer:
     style: markdown
     display_name: short
