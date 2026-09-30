@@ -35,7 +35,7 @@ docs = [
     "jupyter",
     "matplotlib",
     "quartodoc",
-    "griffe<1",
+    "griffe<3",
 ]
 bench = ["bottleneck>=1.3"]
 
