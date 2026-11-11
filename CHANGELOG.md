@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-11-12
 
+- Add the Rust `reject` module: IRAF `imcombine`-style per-sample `ccdclip`,
+  `linearclip`, `minmax`, and `pclip` with a reusable `Workspace`, moved from
+  [imcombiners](https://github.com/ysBach/imcombiners) without behavior changes.
 - Fix overflow in mean: repeated `1e308` values now give mean `1e308` and
   variance `0`; population variance of `[-1e154, 1e154, -1e154, 1e154]` is
   `1e308`. Previously these results were infinite. Applies to 1-D and axis

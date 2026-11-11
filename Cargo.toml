@@ -1,6 +1,6 @@
 [package]
 name = "reducers"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 rust-version = "1.84"
 description = "Rust-backed reductions for NumPy arrays (plain + NaN-aware)"
@@ -21,6 +21,7 @@ include = [
     "/python/reducers/licenses/imcombiners-BSD-3-Clause.txt",
     "/src/**/*.rs",
     "/tests/extreme_moments.rs",
+    "/tests/reject.rs",
     "/tests/test_extreme_moments.py",
     "/tests/sigma_clip.rs",
     "/tests/sigma_clip_edges.rs",

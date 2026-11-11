@@ -1,6 +1,6 @@
 //! Rust-backed reductions for NumPy arrays (plain + NaN-aware).
 //!
-//! The kernel modules (`finite`, `parallel`, `reducers_1d`, `axis`, `sigma_clip`) are pure
+//! The kernel modules (`finite`, `parallel`, `reducers_1d`, `axis`, `sigma_clip`, `reject`) are pure
 //! Rust with no PyO3/NumPy dependency. The PyO3 extension (`reducers._core`) is
 //! compiled only with the `python` / `extension-module` feature.
 //!
@@ -24,6 +24,7 @@ pub mod finite;
 pub mod mask;
 pub mod parallel;
 pub mod reducers_1d;
+pub mod reject;
 pub mod sigma_clip;
 
 pub use finite::{Float, ScanPolicy};

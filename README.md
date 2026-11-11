@@ -90,6 +90,11 @@ and `revert_on_nkeep=false`, making survivor rollback opt-in. See the
 [Rust API](docs/quarto/rust-api.qmd) and
 [performance notes](docs/quarto/performance/sigma-clipping.qmd).
 
+The Rust `reject` module provides IRAF `imcombine`-style per-sample rejection
+(`ccdclip`, `linearclip`, `minmax`, `pclip`) over one slice at a time, with the
+same reusable workspace pattern. It is shared with
+[imcombiners](https://github.com/ysBach/imcombiners) and has no Python binding.
+
 Python exposes `sigclip`/`sigclip_1d`, mask-only variants, fused
 `sigclip_combine`/`sigclip_combine_1d` mean/median calls, restoration flags,
 `grow_mask`, and reusable `SigClip` settings. They call the same Rust engine:

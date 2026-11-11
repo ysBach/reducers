@@ -12,4 +12,8 @@ caller-owned reusable `Workspace` for image-stack adapters and other Rust
 consumers. See the [sigma-clipping performance notes](performance/sigma-clipping.qmd)
 for the implementation techniques used by the Python adapter.
 
+`reducers::reject` provides IRAF `imcombine`-style per-sample rejection
+(CCD noise model, linear thresholds, min/max ranks, and percentile clipping)
+with the same workspace pattern, for image-stack and moving-window callers.
+
 For local tests, `make docs-build` to build local docs and try `rustdoc/reducers/index.html` (or Rust-only case, `make docs-rust` and check `target/doc/reducers/index.html`).
