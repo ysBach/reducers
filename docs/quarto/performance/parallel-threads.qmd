@@ -38,12 +38,12 @@ the reduction semantics.
 | variable | controls | default |
 |---|---|---:|
 | `RAYON_NUM_THREADS` | Rayon worker count inside Rust kernels. Set before the first Rayon use in the Python process. | Rayon default |
-| `REDUCERS_AXIS_SCAN_PLAIN_GRAIN` | Plain scan reducers: `mean`, `sum`, `min`, `max`, and `minmax`. | `262144` |
-| `REDUCERS_AXIS_SCAN_NAN_GRAIN` | NaN-aware scan reducers: `nanmean`, `nansum`, `nanmin`, `nanmax`, and `nanminmax`. | `262144` |
-| `REDUCERS_AXIS_SCAN_VAR_GRAIN` | Variance-style reducers: `var`, `std`, `nanvar`, and `nanstd`. | `262144` |
-| `REDUCERS_AXIS_WEIGHTED_GRAIN` | Weighted reducers: `average` and `nanaverage`. | `262144` |
-| `REDUCERS_AXIS_ORDER_MEDIAN_GRAIN` | Median-style reducers: `median`, `lmedian`, and `nanmedian`. | `1024` |
-| `REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN` | Percentile-style reducers: `percentile`, `quantile`, `nanpercentile`, and `nanquantile`. | `1024` |
+| `REDUCERS_AXIS_SCAN_PLAIN_GRAIN` | Plain scan reducers: `rd.mean`, `rd.sum`, `rd.min`, `rd.max`, and `rd.minmax`. | `262144` |
+| `REDUCERS_AXIS_SCAN_NAN_GRAIN` | NaN-aware scan reducers: `rd.nanmean`, `rd.nansum`, `rd.nanmin`, `rd.nanmax`, and `rd.nanminmax`. | `262144` |
+| `REDUCERS_AXIS_SCAN_VAR_GRAIN` | Variance-style reducers: `rd.var`, `rd.std`, `rd.nanvar`, and `rd.nanstd`. | `262144` |
+| `REDUCERS_AXIS_WEIGHTED_GRAIN` | Weighted reducers: `rd.average` and `rd.nanaverage`. | `262144` |
+| `REDUCERS_AXIS_ORDER_MEDIAN_GRAIN` | Median-style reducers: `rd.median`, `rd.lmedian`, and `rd.nanmedian`. | `1024` |
+| `REDUCERS_AXIS_ORDER_PERCENTILE_GRAIN` | Percentile-style reducers: `rd.percentile`, `rd.quantile`, `rd.nanpercentile`, and `rd.nanquantile`. | `1024` |
 | `REDUCERS_MINMAX_1D_GRAIN` | Work per Rayon chunk for 1-D endpoint scans. | `65536` |
 
 Environment variables are read lazily and cached. Put them before the Python
@@ -154,7 +154,7 @@ Treat tuned grains as workload-specific; rerun the autotuner when the target arr
 ## Large 1-D Endpoint Scans
 
 The 1-D endpoint grain is separate because a 1-D reduction produces one output
-value. It applies to `min`, `max`, `minmax`, `nanmin`, `nanmax`, and `nanminmax`.
+value. It applies to `rd.min`, `rd.max`, `rd.minmax`, `rd.nanmin`, `rd.nanmax`, and `rd.nanminmax`.
 
 Compare serial and early-parallel scans on a large vector:
 

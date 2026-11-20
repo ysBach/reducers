@@ -20,7 +20,7 @@ distance is less than or equal to `grow`.
 
 :   Non-negative radius in pixels. `0` returns an unchanged copy. Values below `1` grow no additional integer-grid samples.
 
-<code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation} [ = ]{.parameter-default-sep} [True]{.parameter-default}</code>
+<code>[**validate**]{.parameter-name} [:]{.parameter-annotation-sep} [bool]{.parameter-annotation}[, default =]{.parameter-default-sep} [True]{.parameter-default}</code>
 
 :   If `True`, validate dimensionality, dtype, finiteness, and contiguity before entering the Rust kernel. If `False`, callers must provide a C-contiguous boolean array with at least two dimensions and a finite non-negative radius.
 

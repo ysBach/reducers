@@ -1,6 +1,15 @@
+filters:
+  - _filters/api-links.lua
+
+api-links:
+  aliases:
+    rd: reducers
+    rdl: reducers.lowlevel
+
 project:
   type: website
   output-dir: _site
+  post-render: _scripts/link_api.py
 
 metadata-files:
   - api/_sidebar.yml
@@ -104,8 +113,10 @@ quartodoc:
         - kind: page
           path: sigclip-settings
           contents:
-            - SigClip
+            - name: SigClip
+              # The constructor parameters document these fields.
+              include_attributes: false
   renderer:
-    style: markdown
+    style: _renderer.py
     display_name: short
     table_style: description-list

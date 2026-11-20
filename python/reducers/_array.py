@@ -152,7 +152,7 @@ def nanmean(a, axis=None, *, ignore_inf=False, validate=True):
 
 
 def average(a, weights=None, axis=None, *, validate=True):
-    """Weighted average; with ``weights=None`` this is equivalent to ``mean``."""
+    """Weighted average; with ``weights=None`` this is equivalent to `reducers.mean`."""
     return _weighted(a, weights, axis, _ALLVALS, validate)
 
 

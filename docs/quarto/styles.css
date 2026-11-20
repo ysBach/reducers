@@ -10,3 +10,8 @@ div.sourceCode pre code {
 main table {
   width: 100%;
 }
+
+main code a.api-symbol {
+  color: var(--bs-link-color);
+  text-decoration: underline;
+}

@@ -81,7 +81,7 @@ choices in this crate, not claimed as new algorithms.
 
 ### Scan Reducers
 
-`mean`, `sum`, `nanmean`, and `nansum` use one scan with a small fixed set of
+`rd.mean`, `rd.sum`, `rd.nanmean`, and `rd.nansum` use one scan with a small fixed set of
 independent accumulators. Instead of updating one running total on every
 element, the loop updates separate totals and merges them at the end.
 
@@ -97,7 +97,7 @@ vectorize the loop. The optimum is hardware-dependent, but four is a reasonable
 default across the targets here; the count is a build-time constant rather than
 a runtime option.
 
-`mean` and `sum` accumulate into `f64` even for `float32` input. That improves
+`rd.mean` and `rd.sum` accumulate into `f64` even for `float32` input. That improves
 numerical stability and keeps integer/bool computed reducers on the same public
 floating-result path, but it also means plain `float32` reductions are not
 trying to reproduce NumPy's lower-precision accumulation speed at all costs.
@@ -116,12 +116,12 @@ measured cases: larger arrays where Rayon can help, fused endpoint scans,
 supported axis layouts, or order-statistic kernels. For tiny 1-D NaN-aware
 calls, Bottleneck can still be faster.
 
-For weighted averages, skipped values also skip their weights, so `nanaverage`
+For weighted averages, skipped values also skip their weights, so `rd.nanaverage`
 does not need to materialize filtered value and weight arrays before reducing.
 
 ### Variance And Standard Deviation
 
-`var` and `std` use a stable two-pass variance: first compute the mean, then
+`rd.var` and `rd.std` use a stable two-pass variance: first compute the mean, then
 accumulate squared deviations. The classic one-pass form,
 `sum(x*x) - sum(x) * mean`, is faster on paper but can catastrophically cancel
 for large-offset data. For example, the true variance of
@@ -134,8 +134,8 @@ two-pass form subtracts the mean first, so it squares the small deviations
 independent-accumulator scan shape for the squared deviations, so the numerical
 fix does not throw away the main scan optimization.
 
-`std` is computed as `sqrt(var)` using the same variance kernel. `nanvar` and
-`nanstd` apply the same scan policies as the other `nan*` reducers.
+`rd.std` is computed as `sqrt(var)` using the same variance kernel. `rd.nanvar` and
+`rd.nanstd` apply the same scan policies as the other `nan*` reducers.
 
 #### Overflow recovery
 
@@ -161,7 +161,7 @@ remain unchanged.
 This is overflow recovery, not a correctly rounded arithmetic guarantee.
 Ordinary finite rounding, underflow without overflow, weighted moments, and
 the final sequential mean used by sigma clipping remain unchanged. A variance
-outside float64's range still gives infinite `std`, because `std = sqrt(var)`.
+outside float64's range still gives infinite `rd.std`, because `std = sqrt(var)`.
 Axis results can also overflow when cast back to float32.
 
 Measured against commit `da8ae8c` on 2026-09-08 (macOS arm64, Rust 1.96,
@@ -175,7 +175,7 @@ release builds, Python 3.13.11, NumPy 2.5.2):
 
 The Python comparison alternated both extracted wheels in one process over
 11 samples per case, with identical inputs and unchanged ordinary results.
-It covered float32/float64 `mean`, `var`, `nanmean`, and `nanvar`: 1-D lengths
+It covered float32/float64 `rd.mean`, `rd.var`, `rd.nanmean`, and `rd.nanvar`: 1-D lengths
 32, 4,096, and 1,048,576; axis-0 shapes `(8, 1024)` and `(64, 4096)`;
 and last-axis shape `(4096, 64)`. Four-thread cases used `(64, 65536)` and
 `(65536, 64)`. Rust timings used nine alternating process pairs across three
@@ -191,37 +191,37 @@ boolean reduction to limit overhead.
 
 ### Min, Max, And Minmax
 
-Plain `min` and `max` must propagate NaN like NumPy. The numeric comparison loop
+Plain `rd.min` and `rd.max` must propagate NaN like NumPy. The numeric comparison loop
 therefore uses comparisons that return the numeric value when exactly one side
 is NaN, and return NaN only when both sides are NaN. A separate NaN flag records
 whether the plain reducer must propagate NaN at the end. This keeps the hot
 comparison path branch-light while preserving plain NumPy semantics.
 
-`nanmin` and `nanmax` use the same comparison shape without the final NaN
+`rd.nanmin` and `rd.nanmax` use the same comparison shape without the final NaN
 propagation step. With `ignore_inf=True`, the loop adds an `is_finite` filter.
 
-`minmax` and `nanminmax` are fused 1-D scans for callers that need both
+`rd.minmax` and `rd.nanminmax` are fused 1-D scans for callers that need both
 endpoints. They use the same fixed-lane and Rayon chunk-reduction strategy as
-`min` and `max`, so they avoid reading the input twice. Axis reductions
+`rd.min` and `rd.max`, so they avoid reading the input twice. Axis reductions
 currently return endpoint pairs as two separate axis reductions, because the
 fused 1-D API returns a scalar pair while axis reductions return arrays.
 
 ### Order Statistics
 
-`median` and `lmedian` copy only the reduced slice into scratch memory. For a
+`rd.median` and `rd.lmedian` copy only the reduced slice into scratch memory. For a
 single rank, they use selection rather than a full sort, avoiding `O(n log n)`
 work when only the middle value is needed. This is the standard order-statistic
-approach, not a package-specific invention. `lmedian` returns the lower
+approach, not a package-specific invention. `rd.lmedian` returns the lower
 selected middle value for even-length inputs.
 
 Floating-point order statistics partition scratch buffers using IEEE 754 total
 ordering (`total_cmp`), providing deterministic tie-breaking (such as ordering
-`-0.0` before `+0.0`). For an even number of retained values, `median` averages
+`-0.0` before `+0.0`). For an even number of retained values, `rd.median` averages
 the two middle values using an overflow-safe midpoint calculation
 (`a + (b - a) / 2.0` for large finite same-sign values) to prevent intermediate
 overflow to infinity.
 
-`percentile` and `quantile` map each requested position to the two integer
+`rd.percentile` and `rd.quantile` map each requested position to the two integer
 ranks that bracket it in sorted order (the floor and ceiling rank used for
 linear interpolation), then deduplicate those ranks across all requests. Call
 the result `k`: the number of *distinct ranks* actually needed. Note this is not
@@ -249,7 +249,7 @@ once instead.
 Integer and bool arrays cannot contain NaN, and that is the speedup: a `nan*`
 reducer has nothing to skip, so it must return exactly the plain result. The
 direct integer/bool kernels use this — they carry no scan policy and no
-NaN/finite branch at all, so `nanmin`, `nanmean`, `nansum`, and the rest run the
+NaN/finite branch at all, so `rd.nanmin`, `rd.nanmean`, `rd.nansum`, and the rest run the
 same NaN-free code as their plain counterparts, with no masking and no
 per-element `isfinite` test. `ignore_inf` is likewise a no-op for these dtypes.
 (`validate=False` dispatches integer input straight to these kernels; with
@@ -258,9 +258,9 @@ applies on the trusted hot-loop path.)
 
 Two output behaviors follow from what each reducer returns:
 
-- Computed reducers (`mean`, `sum`, `average`, `var`, `std`, `median`, and
+- Computed reducers (`rd.mean`, `rd.sum`, `rd.average`, `rd.var`, `rd.std`, `rd.median`, and
   percentiles) accumulate in `f64` and return floating results.
-- Exact-selection reducers (`min`, `nanmin`, `max`, `nanmax`, `lmedian`) return
+- Exact-selection reducers (`rd.min`, `rd.nanmin`, `rd.max`, `rd.nanmax`, `rd.lmedian`) return
   a value that already exists in the input, so they keep the integer/bool dtype
   via direct typed kernels.
 
@@ -296,7 +296,7 @@ stream those adjacent chunks and update matching output positions. That is
 usually better than building a tiny temporary list along the stacking axis for
 every output position, especially once the output image is large.
 
-`mean`, `sum`, `min`, `max`, weighted average, `count_finite`, `var`, and `std`
+`rd.mean`, `rd.sum`, `rd.min`, `rd.max`, weighted average, `count_finite`, `rd.var`, and `rd.std`
 use this streaming shape. Variance and standard deviation still use the stable
 two-pass formula: first compute the mean for each output position, then scan the
 stacking axis again to add squared deviations. This reads the stack twice, but
@@ -322,7 +322,7 @@ Median and percentile benefit from narrow selection kernels and reusable
 scratch; NumPy's median also uses partition, so this is not a full-sort
 comparison. Cheap scans and weighted averages have different crossovers and
 can favor NumPy, especially on small outputs. The benchmark matrix omits axis
-`nanpercentile`/`nanquantile`; it makes no speed claim for those operations.
+`rd.nanpercentile`/`rd.nanquantile`; it makes no speed claim for those operations.
 
 ### Weights
 

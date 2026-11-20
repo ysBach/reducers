@@ -135,9 +135,9 @@ _WEIGHTED_SUM_NOTE = (
 
 _EXACT_INT_NOTE = (
     "For integer and bool arrays there is no NaN to skip, so the ``nan*`` forms "
-    "return the same result as their plain counterparts. ``min``, ``nanmin``, "
-    "``max``, ``nanmax``, and ``lmedian`` preserve the integer or bool dtype for "
-    "non-empty reducing-axis slices."
+    "return the same result as their plain counterparts. `reducers.min`, "
+    "`reducers.nanmin`, `reducers.max`, `reducers.nanmax`, and `reducers.lmedian` "
+    "preserve the integer or bool dtype for non-empty reducing-axis slices."
 )
 
 _COUNT_NOTE = (
@@ -287,9 +287,10 @@ _SPECS = {
         "Return the lower value-selecting median while skipping NaN values.",
         _params(_IGNORE_INF),
         _EXACT_SELECT_RETURNS,
-        "For an even number of retained values, `lmedian` returns the lower of "
-        "the two middle values instead of averaging them. For an odd number of "
-        f"retained values it matches `median`.\n\n{_NAN_NOTE}\n\n"
+        "For an even number of retained values, `reducers.lmedian` returns the "
+        "lower of the two middle values instead of averaging them. "
+        "For an odd number of retained values it matches `reducers.median`.\n\n"
+        f"{_NAN_NOTE}\n\n"
         f"{_TOTAL_ORDER_NOTE}\n\n{_EXACT_INT_NOTE}",
     ),
     "percentile": (
