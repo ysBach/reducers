@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 - 2026-11-20
 
 - Adopt BSD-3-Clause for the project and retain the imcombiners attribution.
 
