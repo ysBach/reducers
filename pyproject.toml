@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.5,<2"]
+requires = ["maturin>=1.9.3,<2"]
 build-backend = "maturin"
 
 [project]
@@ -7,13 +7,13 @@ name = "reducers"
 version = "0.4.1"
 description = "Rust-backed reductions for NumPy arrays (plain + NaN-aware)"
 readme = "README.md"
-license = { text = "MIT AND BSD-3-Clause" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE", "python/reducers/licenses/*.txt"]
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Rust",
     "Topic :: Scientific/Engineering",
@@ -30,7 +30,7 @@ reducers-autotune = "reducers.autotuner:main"
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
-dev = ["pytest>=7", "ruff", "maturin>=1.5,<2", "ipython"]
+dev = ["pytest>=7", "ruff", "maturin>=1.9.3,<2", "ipython"]
 docs = [
     "jupyter",
     "matplotlib",

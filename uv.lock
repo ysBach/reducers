@@ -2640,7 +2640,7 @@ requires-dist = [
     { name = "ipython", marker = "extra == 'dev'" },
     { name = "jupyter", marker = "extra == 'docs'" },
     { name = "matplotlib", marker = "extra == 'docs'" },
-    { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.5,<2" },
+    { name = "maturin", marker = "extra == 'dev'", specifier = ">=1.9.3,<2" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7" },

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Adopt BSD-3-Clause for the project and retain the imcombiners attribution.
+
 ## 0.4.1 - 2026-11-12
 
 - Add the Rust `reject` module: IRAF `imcombine`-style per-sample `ccdclip`,
