@@ -120,7 +120,7 @@ jobs:
           uv run --no-project --active pytest --import-mode=importlib -q "$GITHUB_WORKSPACE/tests"
       - name: Ensure builds preserved lockfiles
         run: git diff --exit-code -- Cargo.lock uv.lock
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: ci-${{ matrix.artifact }}
           path: dist/${{ matrix.glob }}

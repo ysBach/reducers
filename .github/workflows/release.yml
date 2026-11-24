@@ -32,7 +32,7 @@ jobs:
         run: >-
           python scripts/check_release.py --require-clean --tag "$RELEASE_TAG"
           --github-output "$GITHUB_OUTPUT" --notes-output release-notes.md
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: release-notes.md
@@ -101,7 +101,7 @@ jobs:
           cd "$RUNNER_TEMP"
           python -I "$GITHUB_WORKSPACE/scripts/smoke_install.py"
           uv run --no-project --active pytest --import-mode=importlib -q "$GITHUB_WORKSPACE/tests"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.platform.name }}
           path: dist/*.whl
